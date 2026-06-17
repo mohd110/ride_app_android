@@ -1,0 +1,26 @@
+name: riderapp
+description: Rider Connect App - Hybrid Mobile and Web Simulator.
+version: 4.2.1+1
+
+environment:
+  sdk: ">=2.12.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  supabase_flutter: ^2.15.0
+  geolocator: ^14.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/rider_profile.png
+    - assets/images/customer_avatar.png
+    - assets/images/delivery_proof.png

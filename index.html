@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Rider Connect – Rider Portal</title>
+    <meta name="description" content="Rider Connect – Fleet delivery management portal for professional riders." />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ════════════════════════ DEVICE CHASSIS ════════════════════════ -->
+<div class="device-container">
+    <div class="device-notch"><div class="notch-camera"></div></div>
+
+    <!-- STATUS BAR -->
+    <div class="device-status-bar" id="status-bar">
+        <span class="status-left" id="status-time">9:41</span>
+        <div class="status-right">
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#1A1A2E;">
+                <path d="M1.5 8.43C4.95 5.03 9.64 3.5 12 3.5c2.36 0 7.05 1.53 10.5 4.93L21 9.93c-3.02-2.99-6.98-4.43-9-4.43s-5.98 1.44-9 4.43L1.5 8.43zm3.5 3.5C7.12 9.8 9.54 8.5 12 8.5s4.88 1.3 7 3.43l-1.5 1.5C15.9 11.8 14 10.5 12 10.5s-3.9 1.3-5.5 2.93l-1.5-1.5zm3.5 3.5C9.62 13.3 10.79 12.5 12 12.5s2.38.8 3.5 2.93L12 18.5l-3.5-3.07z"/>
+            </svg>
+            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:#1A1A2E;">
+                <path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/>
+            </svg>
+            <div class="status-battery">
+                <div class="status-battery-fill" style="width: 75%;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- APP CONTAINER -->
+    <div class="app-container" id="app-container">
+
+        <!-- ══════════════ ALERT POPUP ══════════════ -->
+        <div class="alert-popup" id="alert-popup">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            <span class="alert-popup-text" id="alert-text">New order incoming!</span>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--                 1. LOGIN VIEW                       -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view login-view active" id="view-login">
+            <div class="login-header-banner">
+                <div class="brand-logo">
+                    <svg viewBox="0 0 24 24"><path d="M12 2L1 7l11 5 9-4.09V17h2V7L12 2zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"/></svg>
+                </div>
+                <div class="brand-title">Rider Connect</div>
+                <div class="brand-subtitle">v4.2.1 • Fleet Rider Portal</div>
+            </div>
+
+            <div class="login-form-body">
+                <div class="welcome-msg">
+                    <h2>Welcome Back 👋</h2>
+                    <p>Sign in to your fleet account to start earning.</p>
+                </div>
+
+                <div class="input-group">
+                    <label>Username or Email</label>
+                    <div class="input-wrapper">
+                        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                        <input id="login-user" type="text" placeholder="admin" autocomplete="username" value="" />
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Password</label>
+                    <div class="input-wrapper">
+                        <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                        <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" />
+                    </div>
+                </div>
+
+                <a href="#" class="forgot-password">Forgot password?</a>
+
+                <div id="login-error" style="color: var(--primary); font-size: 12px; font-weight: 600; min-height: 16px;"></div>
+
+                <button class="btn" id="btn-login">
+                    <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:white;"><path d="M11 7L9.6 8.4l2.6 2.6H2v2h10.2l-2.6 2.6L11 17l5-5-5-5zm9 12h-8v2h8c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2h-8v2h8v14z"/></svg>
+                    Sign In
+                </button>
+
+                <div class="login-footer">
+                    <span>New to Rider Connect? </span>
+                    <a href="#">Register your fleet</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--             2. HOME / OFFLINE VIEW                  -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view offline-view" id="view-offline">
+            <!-- Header -->
+            <div class="app-header">
+                <div class="header-rider-badge">
+                    <div class="rider-avatar-sm">
+                        <img src="rider_profile.png" alt="Rider" onerror="this.style.background='rgba(255,255,255,0.2)'">
+                    </div>
+                    <div class="header-rider-info">
+                        <h4>Alex Johnson</h4>
+                        <span>Fleet ID: A22-01 • Rider #4921</span>
+                    </div>
+                </div>
+                <span class="status-indicator status-offline" id="offline-badge">OFFLINE</span>
+            </div>
+
+            <!-- Offline info -->
+            <div class="offline-info-container">
+                <div class="offline-icon-glow">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                </div>
+                <h2>You are Offline</h2>
+                <p>You are currently offline. Tap the button below to start receiving delivery orders.</p>
+            </div>
+
+            <!-- Stats summary -->
+            <div style="padding: 0 16px 16px 16px;">
+                <div class="card">
+                    <div class="card-title">TOTAL EARNINGS</div>
+                    <div style="display:flex; justify-content:space-around; text-align:center;">
+                        <div><div style="font-size:20px;font-weight:800;color:var(--primary)">$142.50</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Today</div></div>
+                        <div style="width:1px;background:var(--border-color);"></div>
+                        <div><div style="font-size:20px;font-weight:800;color:var(--text-primary)">3</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Deliveries</div></div>
+                        <div style="width:1px;background:var(--border-color);"></div>
+                        <div><div style="font-size:20px;font-weight:800;color:var(--text-primary)">2.4h</div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Online</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- GO ONLINE button -->
+            <button class="btn btn-go-online" id="btn-go-online">
+                <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:white;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+                GO ONLINE
+            </button>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--          3. HOME / ONLINE (RADAR) VIEW              -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view online-view" id="view-online">
+            <!-- Header -->
+            <div class="app-header">
+                <div class="header-rider-badge">
+                    <div class="rider-avatar-sm">
+                        <img src="rider_profile.png" alt="Rider" onerror="this.style.background='rgba(255,255,255,0.2)'">
+                    </div>
+                    <div class="header-rider-info">
+                        <h4>Alex Johnson</h4>
+                        <span>Fleet ID: A22-01 • Rider #4921</span>
+                    </div>
+                </div>
+                <span class="status-indicator status-online">🟢 ONLINE</span>
+            </div>
+
+            <!-- Searching animation -->
+            <div class="online-searching-container" style="flex:1;">
+                <div class="radar-container">
+                    <div class="radar-circle"></div>
+                    <div class="radar-circle"></div>
+                    <div class="radar-circle"></div>
+                    <div class="radar-center">
+                        <svg viewBox="0 0 24 24"><path d="M12 2L1 7l11 5 9-4.09V17h2V7L12 2z"/></svg>
+                    </div>
+                </div>
+                <h2>Searching for Orders</h2>
+                <p>Finding delivery assignments near you...</p>
+
+                <!-- Live order card preview  -->
+                <div style="margin-top: 24px; width: 100%; padding: 0 16px;">
+                    <div class="card" style="margin-bottom:0;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-size:11px;font-weight:700;color:var(--primary);text-transform:uppercase;">🔴 Last Delivery</span>
+                            <span style="font-size:12px;color:var(--text-muted);">Order #882-LK90</span>
+                        </div>
+                        <div style="font-size:13px;color:var(--text-primary);font-weight:600;">458 West Maple St.</div>
+                        <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Arriving in 8 mins • 1.4 km</div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-go-offline" id="btn-go-offline">Go Offline</button>
+
+            <!-- ─── New Assignment Overlay ─── -->
+            <div class="assignment-overlay" id="assignment-overlay">
+                <div class="assignment-header">
+                    <div class="assignment-tag">New Assignment</div>
+                    <div class="assignment-title">Baba Biryani</div>
+                    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Baba Biryani – Downtown • 124 Commercial Plaza</div>
+                    <div class="timer-container">
+                        <svg class="timer-svg" viewBox="0 0 90 90">
+                            <circle class="timer-circle-bg" cx="45" cy="45" r="40"/>
+                            <circle class="timer-circle-val" id="timer-circle" cx="45" cy="45" r="40"/>
+                        </svg>
+                        <span class="timer-text" id="timer-text">30</span>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="order-specs">
+                        <div class="spec-item">
+                            <span class="spec-val earnings" id="spec-earn">$14.50</span>
+                            <span class="spec-lbl">Est. Earn</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-val" id="spec-dist">4.2 km</span>
+                            <span class="spec-lbl">Distance</span>
+                        </div>
+                        <div class="spec-item">
+                            <span class="spec-val" id="spec-eta">12 min</span>
+                            <span class="spec-lbl">ETA</span>
+                        </div>
+                    </div>
+
+                    <div style="height:12px;"></div>
+
+                    <div class="route-info-card">
+                        <div class="route-step">
+                            <div class="route-dot pickup"></div>
+                            <div class="route-details">
+                                <div class="label">RESTAURANT PICKUP</div>
+                                <div class="address">Baba Biryani – Downtown</div>
+                                <div style="font-size:11px;color:var(--text-muted);">124 Commercial Plaza, Se</div>
+                            </div>
+                            <div style="font-size:12px;font-weight:700;color:var(--text-primary);">450m • 3 min</div>
+                        </div>
+                        <div class="route-step">
+                            <div class="route-dot dropoff"></div>
+                            <div class="route-details">
+                                <div class="label">CUSTOMER DROP-OFF</div>
+                                <div class="address">244 East 42nd St, Suite 4B</div>
+                                <div style="font-size:11px;color:var(--text-muted);">42nd Central Ave, Block B</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="assignment-actions">
+                    <button class="btn btn-accept" id="btn-accept">Accept Order</button>
+                    <div class="btn-reject" id="btn-reject">Decline</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--        4. NAVIGATING TO PICKUP / ORDER DETAILS      -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view nav-view" id="view-navigation">
+            <!-- MAP -->
+            <div class="map-canvas-container">
+                <svg class="map-svg" viewBox="0 0 390 600" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Road grid -->
+                    <rect width="390" height="600" fill="#E8ECF0"/>
+                    <line x1="0" y1="200" x2="390" y2="200" class="map-road"/>
+                    <line x1="0" y1="350" x2="390" y2="350" class="map-road"/>
+                    <line x1="100" y1="0" x2="100" y2="600" class="map-road"/>
+                    <line x1="250" y1="0" x2="250" y2="600" class="map-road"/>
+                    <rect x="120" y="70" width="110" height="100" rx="8" fill="#FFFFFF" opacity="0.7"/>
+                    <rect x="10" y="230" width="70" height="100" rx="8" fill="#FFFFFF" opacity="0.7"/>
+                    <rect x="270" y="230" width="100" height="110" rx="8" fill="#FFFFFF" opacity="0.7"/>
+                    <rect x="120" y="370" width="110" height="80" rx="8" fill="#FFFFFF" opacity="0.7"/>
+                    <!-- Route -->
+                    <polyline points="195,480 195,350 250,350 250,200 195,200 195,130" class="map-route-line"/>
+                </svg>
+
+                <!-- Markers -->
+                <div class="map-marker" style="left:50%; top:77%;">
+                    <div class="map-pin customer">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                    </div>
+                </div>
+                <div class="map-marker" style="left:50%; top:22%;">
+                    <div class="map-pin restaurant">
+                        <svg viewBox="0 0 24 24"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>
+                    </div>
+                </div>
+                <!-- Rider dot -->
+                <div class="map-rider-marker" style="position:absolute;left:50%;top:54%;">
+                    <svg viewBox="0 0 24 24"><path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z"/></svg>
+                </div>
+
+                <!-- Nav turn banner (top) -->
+                <div class="nav-banner">
+                    <div class="nav-banner-icon">
+                        <svg viewBox="0 0 24 24"><path d="M21 3L3 10.53v.98l6.84 2.65L12.48 21h.98L21 3z"/></svg>
+                    </div>
+                    <div class="nav-banner-text">
+                        <h3>Turn right on Congress Ave</h3>
+                        <p>In 200 m • Stay on this road</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- HUD PANEL -->
+            <div class="nav-hud-panel">
+                <div class="hud-meta">
+                    <div>
+                        <div class="hud-eta-time">3 min</div>
+                        <div class="hud-eta-dist">450 m away</div>
+                    </div>
+                    <div class="hud-nav-dest">
+                        <div class="hud-nav-dest-label">NAVIGATING TO</div>
+                        <div class="hud-nav-dest-name">Baba Biryani</div>
+                        <div style="font-size:11px;color:var(--text-muted);">124 Commercial Plaza</div>
+                    </div>
+                </div>
+                <button class="btn" id="btn-arrived" style="border-radius:12px;font-size:14px;">
+                    ARRIVED AT DESTINATION
+                </button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--           5. PICKUP CONFIRMATION VIEW               -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view" id="view-pickup" style="background:#F5F5F5;">
+            <div class="header-nav-title" style="background:var(--primary);border-bottom:none;padding:14px 16px 12px;">
+                <button class="btn-back-circle" style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);" onclick="navigate('view-navigation')">
+                    <svg viewBox="0 0 24 24" style="fill:white;"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                </button>
+                <div>
+                    <h2 style="color:white;font-size:16px;font-weight:700;">Pickup Confirmation</h2>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.75);">Order #RD-9902 • Baba Biryani</div>
+                </div>
+            </div>
+
+            <div class="content-area" style="padding-top:14px;">
+                <!-- Restaurant info -->
+                <div class="card" style="margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+                        <div style="width:44px;height:44px;background:var(--primary-light);border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:var(--primary);"><path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/></svg>
+                        </div>
+                        <div>
+                            <div style="font-size:14px;font-weight:700;color:var(--text-primary);">Baba Biryani – Downtown</div>
+                            <div style="font-size:11px;color:var(--text-muted);">124 Commercial Plaza, Sector C</div>
+                        </div>
+                        <div style="margin-left:auto;text-align:right;">
+                            <div style="font-size:13px;font-weight:800;color:var(--primary);">$14.50</div>
+                            <div style="font-size:10px;color:var(--text-muted);">+$3 tip</div>
+                        </div>
+                    </div>
+                    <div style="border-top:1px solid var(--border-color);padding-top:10px;display:flex;gap:16px;">
+                        <div><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Order ID</span><div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-top:2px;">#RD-9902</div></div>
+                        <div><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Restaurant ID</span><div style="font-size:12px;font-weight:700;color:var(--text-primary);margin-top:2px;">#4921-A</div></div>
+                    </div>
+                </div>
+
+                <!-- Items checklist -->
+                <div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Items to Confirm</div>
+                <div class="order-checklist" id="pickup-checklist">
+                    <div class="checklist-item" onclick="toggleCheck(this)">
+                        <div class="chk-box"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+                        <div class="item-details">
+                            <div class="item-name-qty"><span>Chicken Biryani (Large)</span><span class="item-qty">×2</span></div>
+                            <div class="item-sub">Standard Bag • Special Pack</div>
+                        </div>
+                    </div>
+                    <div class="checklist-item" onclick="toggleCheck(this)">
+                        <div class="chk-box"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+                        <div class="item-details">
+                            <div class="item-name-qty"><span>Mango Lassi</span><span class="item-qty">×1</span></div>
+                            <div class="item-sub">Sealed Container</div>
+                        </div>
+                    </div>
+                    <div class="checklist-item" onclick="toggleCheck(this)">
+                        <div class="chk-box"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+                        <div class="item-details">
+                            <div class="item-name-qty"><span>Garlic Naan</span><span class="item-qty">×3</span></div>
+                            <div class="item-sub">Pack separately</div>
+                        </div>
+                    </div>
+                    <div class="checklist-item" onclick="toggleCheck(this)">
+                        <div class="chk-box"><svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></div>
+                        <div class="item-details">
+                            <div class="item-name-qty"><span>Extra Chutneys</span><span class="item-qty">×4</span></div>
+                            <div class="item-sub">Customer requested • Double-bag liquids</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Order notes -->
+                <div class="card">
+                    <div class="card-title">ORDER NOTES</div>
+                    <div style="font-size:12px;color:var(--text-secondary);font-style:italic;line-height:1.5;">"Pack extra chutneys and double-bag the liquids."</div>
+                </div>
+            </div>
+
+            <button class="btn" id="btn-mark-picked" style="margin:0 16px 16px 16px;">
+                <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:white;"><path d="M20 6h-2.18c.07-.44.18-.88.18-1.5 0-2.21-1.79-4-4-4-1.19 0-2.27.52-3 1.35C10.27 1.02 9.19.5 8 .5c-2.21 0-4 1.79-4 4 0 .62.11 1.06.18 1.5H2v2h18V6zm-9.5-.5c-.28 0-.5-.22-.5-.5s.22-.5.5-.5.5.22.5.5-.22.5-.5.5zM2 20c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V10H2v10z"/></svg>
+                Mark as Picked Up
+            </button>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--        6. NAVIGATING TO CUSTOMER VIEW               -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view" id="view-deliver" style="background:#F5F5F5;">
+            <div style="background:var(--primary);padding:14px 16px 12px;display:flex;align-items:center;gap:14px;flex-shrink:0;">
+                <button class="btn-back-circle" style="background:rgba(255,255,255,0.2);border-color:rgba(255,255,255,0.3);" onclick="navigate('view-pickup')">
+                    <svg viewBox="0 0 24 24" style="fill:white;"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                </button>
+                <div>
+                    <h2 style="color:white;font-size:16px;font-weight:700;">Navigating to Customer</h2>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.75);">Order #RD-9902 • IN PROGRESS</div>
+                </div>
+                <span style="margin-left:auto;background:rgba(255,255,255,0.2);color:white;padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;">PICKUP IN PROGRESS</span>
+            </div>
+
+            <div class="content-area">
+                <!-- Customer info -->
+                <div class="customer-card">
+                    <div class="customer-avatar">
+                        <img src="customer_avatar.png" alt="Customer" onerror="this.style.background='#F0F2F5'">
+                    </div>
+                    <div class="customer-meta">
+                        <div class="customer-name">Alex Johnson</div>
+                        <div class="customer-rating">
+                            <svg viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                            4.98 Rating
+                        </div>
+                        <div style="font-size:11px;color:var(--accent-green);font-weight:700;margin-top:3px;">+$3.00 Tip</div>
+                    </div>
+                    <div class="customer-actions">
+                        <div class="btn-action-circle call">
+                            <svg viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+                        </div>
+                        <div class="btn-action-circle msg">
+                            <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Address -->
+                <div class="card">
+                    <div class="card-title">DELIVERY ADDRESS</div>
+                    <div style="font-size:14px;font-weight:700;color:var(--text-primary);margin-bottom:4px;">244 East 42nd St, Suite 4B</div>
+                    <div style="font-size:12px;color:var(--text-muted);">42nd Central Ave, Block B</div>
+                    <div style="display:flex;gap:14px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border-color);">
+                        <div><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">Distance</span><div style="font-size:14px;font-weight:800;color:var(--text-primary);margin-top:2px;">4.2 km</div></div>
+                        <div><span style="font-size:10px;color:var(--text-muted);text-transform:uppercase;font-weight:700;">ETA</span><div style="font-size:14px;font-weight:800;color:var(--primary);margin-top:2px;">12 min</div></div>
+                    </div>
+                </div>
+
+                <!-- Delivery instructions -->
+                <div class="card">
+                    <div class="card-title">CUSTOMER NOTE</div>
+                    <div style="font-size:12px;color:var(--text-secondary);font-style:italic;line-height:1.5;">"Please ring the doorbell only once, the baby is sleeping. Leave at door if no answer."</div>
+                </div>
+
+                <!-- Proof of delivery -->
+                <div class="card">
+                    <div class="card-title">PROOF OF DELIVERY (Optional)</div>
+                    <div class="photo-uploader" id="photo-upload-btn" onclick="handlePhotoUpload()">
+                        <svg viewBox="0 0 24 24"><path d="M20 5h-3.17L15 3H9L7.17 5H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                        <span>Tap to take / upload photo</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SLIDE TO COMPLETE -->
+            <div class="slide-container" id="slide-container">
+                <div class="slide-bg-fill" id="slide-bg-fill"></div>
+                <div class="slide-handle" id="slide-handle">
+                    <svg viewBox="0 0 24 24"><path d="M12 2L1 7l11 5 9-4.09V17h2V7L12 2z"/></svg>
+                </div>
+                <span class="slide-text">Slide to Confirm Delivery</span>
+            </div>
+
+            <!-- Success overlay -->
+            <div class="success-overlay" id="success-overlay">
+                <div class="success-check-ring">
+                    <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                </div>
+                <h2>Delivery Complete! 🎉</h2>
+                <p>Order #RD-9902 has been successfully delivered to Alex Johnson.</p>
+                <div class="success-amount-glow">+$17.50</div>
+                <button class="btn" onclick="navigate('view-offline');document.getElementById('success-overlay').classList.remove('active');" style="width:100%;border-radius:12px;">
+                    Back to Home
+                </button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--           7. EARNINGS VIEW                          -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view earnings-view" id="view-earnings">
+            <!-- Earnings hero -->
+            <div class="earnings-hero-card">
+                <div class="app-header" style="background:transparent;padding:0 0 14px 0;">
+                    <div style="color:white;font-size:16px;font-weight:700;font-family:'Outfit',sans-serif;">Earnings</div>
+                    <span style="font-size:11px;color:rgba(255,255,255,0.75);background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;">Rider #4921</span>
+                </div>
+                <div class="earnings-hero-label">TOTAL EARNINGS THIS WEEK</div>
+                <div class="earnings-hero-amount">$1,248.50</div>
+                <div class="earnings-hero-sub">📈 12% higher than last week</div>
+
+                <div class="earnings-hero-stats">
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">142</div>
+                        <div class="hero-stat-lbl">Deliveries</div>
+                    </div>
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">38.5h</div>
+                        <div class="hero-stat-lbl">Online Hrs</div>
+                    </div>
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">4.98</div>
+                        <div class="hero-stat-lbl">Rating</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Period selector -->
+            <div class="tab-toggle-pill" style="margin-top: 42px;">
+                <div class="pill-option active" onclick="selectPill(this,'daily')">Daily</div>
+                <div class="pill-option" onclick="selectPill(this,'weekly')">Weekly</div>
+                <div class="pill-option" onclick="selectPill(this,'monthly')">Monthly</div>
+            </div>
+
+            <!-- Bar chart -->
+            <div class="card chart-card" id="earnings-chart">
+                <!-- JS renders bars -->
+            </div>
+
+            <!-- Breakdown -->
+            <div class="income-breakdown-card">
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Base Earnings</span>
+                    <span class="breakdown-val">$1,102.00</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Tips</span>
+                    <span class="breakdown-val green">+$98.50</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Bonuses</span>
+                    <span class="breakdown-val orange">+$48.00</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Total</span>
+                    <span class="breakdown-val red">$1,248.50</span>
+                </div>
+            </div>
+
+            <!-- Recent trips -->
+            <div style="padding:0 16px 6px 16px;">
+                <div class="card-title">RECENT TRIPS</div>
+            </div>
+            <div class="recent-list">
+                <div class="trip-item">
+                    <div class="trip-left">
+                        <div class="trip-title">Gourmet Burger Kitchen</div>
+                        <div class="trip-meta">2.4 miles • 18:42 • Order #8291</div>
+                    </div>
+                    <div class="trip-right">
+                        <div class="trip-payout">$8.50</div>
+                        <div class="trip-tip">+$2.00 Tip</div>
+                    </div>
+                </div>
+                <div class="trip-item">
+                    <div class="trip-left">
+                        <div class="trip-title">Sushi Garden</div>
+                        <div class="trip-meta">1.1 miles • 18:10 • Order #8288</div>
+                    </div>
+                    <div class="trip-right">
+                        <div class="trip-payout">$6.20</div>
+                        <div class="trip-tip" style="color:var(--text-muted);">No Tip</div>
+                    </div>
+                </div>
+                <div class="trip-item">
+                    <div class="trip-left">
+                        <div class="trip-title">Spice Route Kitchen</div>
+                        <div class="trip-meta">4.2 km • 16:30 • Order #RD-9902</div>
+                    </div>
+                    <div class="trip-right">
+                        <div class="trip-payout">$14.50</div>
+                        <div class="trip-tip">+$3.00 Tip</div>
+                    </div>
+                </div>
+                <div class="trip-item">
+                    <div class="trip-left">
+                        <div class="trip-title">Baba Biryani</div>
+                        <div class="trip-meta">3.0 km • 14:12 • Order #RD-9876</div>
+                    </div>
+                    <div class="trip-right">
+                        <div class="trip-payout">$11.00</div>
+                        <div class="trip-tip">+$1.50 Tip</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--              8. PROFILE VIEW                        -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <div class="view profile-view" id="view-profile">
+            <!-- Profile header -->
+            <div class="profile-header-card">
+                <div class="profile-avatar-large">
+                    <img src="rider_profile.png" alt="Rider" onerror="this.style.background='rgba(255,255,255,0.2)'">
+                </div>
+                <h2>Alex Johnson</h2>
+                <p>Member since Jan 2023 • Fleet ID: A22-01</p>
+
+                <div class="profile-stats-strip">
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">4.98</div>
+                        <div class="hero-stat-lbl">Rating</div>
+                    </div>
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num">142</div>
+                        <div class="hero-stat-lbl">Deliveries</div>
+                    </div>
+                    <div class="hero-stat-item">
+                        <div class="hero-stat-num" style="font-size:13px;">$1,248</div>
+                        <div class="hero-stat-lbl">This Week</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-area with-header-stats">
+                <!-- Vehicle card -->
+                <div class="card">
+                    <div class="card-title">VEHICLE</div>
+                    <div class="vehicle-card">
+                        <div class="vehicle-left">
+                            <div class="vehicle-icon-box">
+                                <svg viewBox="0 0 24 24"><path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>
+                            </div>
+                            <div class="vehicle-name-id">
+                                <h4>Fleet Bike #88-X9-RDR</h4>
+                                <p>DEVICE ID: 88-X9-RDR</p>
+                            </div>
+                        </div>
+                        <div class="vehicle-battery">
+                            <span class="battery-text">78%</span>
+                            <div class="battery-pill">
+                                <div class="battery-level-fill" style="width:78%;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Menu items -->
+                <div class="card-title">ACCOUNT</div>
+                <div style="height:8px;"></div>
+                <div class="list-menu-item">
+                    <div class="list-menu-left">
+                        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                        <span>Personal Information</span>
+                    </div>
+                    <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                </div>
+                <div class="list-menu-item">
+                    <div class="list-menu-left">
+                        <svg viewBox="0 0 24 24"><path d="M11.5 2C6.81 2 3 5.81 3 10.5S6.81 19 11.5 19h.5v3c4.86-2.34 8-7 8-11.5C20 5.81 16.19 2 11.5 2zm1 14.5h-2v-2h2v2zm0-4h-2c0-3.25 3-3 3-5 0-1.1-.9-2-2-2s-2 .9-2 2h-2c0-2.21 1.79-4 4-4s4 1.79 4 4c0 2.5-3 2.75-3 5z"/></svg>
+                        <span>Help & Support</span>
+                    </div>
+                    <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                </div>
+                <div class="list-menu-item">
+                    <div class="list-menu-left">
+                        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                        <span>Settings</span>
+                    </div>
+                    <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                </div>
+
+                <button class="btn btn-logout" id="btn-logout">
+                    <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:var(--primary);"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>
+                    Sign Out
+                </button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!--              BOTTOM TAB BAR                          -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <nav class="bottom-tabs" id="bottom-tabs" style="display:none;">
+            <button class="tab-btn active" id="tab-tasks" onclick="switchTab('tasks')">
+                <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-1.99.9-1.99 2L3 19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+                Tasks
+            </button>
+            <button class="tab-btn" id="tab-earnings" onclick="switchTab('earnings')">
+                <svg viewBox="0 0 24 24"><path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z"/></svg>
+                Earnings
+            </button>
+            <button class="tab-btn" id="tab-profile" onclick="switchTab('profile')">
+                <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                Profile
+            </button>
+        </nav>
+
+    </div><!-- /app-container -->
+</div><!-- /device-container -->
+
+<script src="app.js"></script>
+</body>
+</html>
