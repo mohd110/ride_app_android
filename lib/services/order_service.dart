@@ -57,6 +57,7 @@ class OrderService {
         .from('orders')
         .select(select)
         .isFilter('rider_id', null)
+        .eq('payment_status', 'verified')
         .inFilter('status', ['accepted', 'preparing', 'ready'])
         .order('created_at');
 
