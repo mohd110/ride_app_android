@@ -8,6 +8,12 @@
         android:label="riderapp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Replace with a Maps SDK for Android key from Google Cloud Console.
+             The web app's NEXT_PUBLIC_GOOGLE_MAPS_KEY is a separate (JS API) key —
+             Android needs its own key restricted to this app's package name + SHA-1. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyC7jO4LEfp3xRtT3dn5cU7szQFJNCowvNI"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

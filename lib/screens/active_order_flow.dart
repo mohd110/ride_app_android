@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_card.dart';
+import '../widgets/delivery_route_map.dart';
 import '../widgets/swipe_slider.dart';
 import 'active_order_detail_screen.dart';
 import 'chat_screen.dart';
@@ -68,8 +69,11 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
           ),
         ),
         Positioned.fill(
-          child: CustomPaint(
-            painter: _MapPainter(progress: state.gpsProgress, isToCustomer: isToCustomer),
+          child: DeliveryRouteMap(
+            restaurantLat: order.restaurantLat,
+            restaurantLng: order.restaurantLng,
+            customerLat: order.customerLat,
+            customerLng: order.customerLng,
           ),
         ),
         Positioned(
@@ -446,47 +450,5 @@ class _SummaryStat extends StatelessWidget {
         Text(value, style: const TextStyle(color: AppColors.primary, fontSize: 22, fontWeight: FontWeight.w800)),
       ],
     );
-  }
-}
-
-class _MapPainter extends CustomPainter {
-  final double progress;
-  final bool isToCustomer;
-
-  _MapPainter({required this.progress, required this.isToCustomer});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bgPaint = Paint()..color = AppColors.surfaceAccent;
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), bgPaint);
-
-    final gridPaint = Paint()
-      ..color = AppColors.border.withOpacity(0.6)
-      ..strokeWidth = 1;
-    for (double x = 0; x < size.width; x += 40) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (double y = 0; y < size.height; y += 40) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final routePaint = Paint()
-      ..color = AppColors.primary
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round;
-
-    final start = Offset(size.width * 0.3, size.height * 0.75);
-    final end = Offset(size.width * 0.7, isToCustomer ? size.height * 0.3 : size.height * 0.35);
-    canvas.drawLine(start, end, routePaint);
-
-    final riderPos = Offset.lerp(start, end, progress.clamp(0.0, 1.0))!;
-    canvas.drawCircle(end, 12, Paint()..color = AppColors.primary);
-    canvas.drawCircle(riderPos, 10, Paint()..color = Colors.white);
-    canvas.drawCircle(riderPos, 10, Paint()..color = AppColors.primary..style = PaintingStyle.stroke..strokeWidth = 2);
-  }
-
-  @override
-  bool shouldRepaint(covariant _MapPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.isToCustomer != isToCustomer;
   }
 }

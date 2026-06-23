@@ -50,9 +50,13 @@ class ActiveOrderData {
   final String restaurant;
   final String restaurantAddress;
   final String restaurantPhone;
+  final double? restaurantLat;
+  final double? restaurantLng;
   final String customerName;
   final String customerAddress;
   final String customerPhone;
+  final double? customerLat;
+  final double? customerLng;
   final String pickupInstruction;
   final String deliveryNote;
   final double guaranteedEarnings;
@@ -68,9 +72,13 @@ class ActiveOrderData {
     required this.restaurant,
     required this.restaurantAddress,
     required this.restaurantPhone,
+    this.restaurantLat,
+    this.restaurantLng,
     required this.customerName,
     required this.customerAddress,
     required this.customerPhone,
+    this.customerLat,
+    this.customerLng,
     required this.pickupInstruction,
     required this.deliveryNote,
     required this.guaranteedEarnings,
@@ -107,9 +115,13 @@ class ActiveOrderData {
       restaurant: restaurant?['name'] as String? ?? 'Restaurant',
       restaurantAddress: restaurant?['address'] as String? ?? '',
       restaurantPhone: restaurant?['phone'] as String? ?? '',
+      restaurantLat: (restaurant?['latitude'] as num?)?.toDouble(),
+      restaurantLng: (restaurant?['longitude'] as num?)?.toDouble(),
       customerName: delivery['name'] as String? ?? 'Customer',
       customerAddress: delivery['address'] as String? ?? '',
       customerPhone: delivery['phone'] as String? ?? '',
+      customerLat: (json['delivery_latitude'] as num?)?.toDouble(),
+      customerLng: (json['delivery_longitude'] as num?)?.toDouble(),
       pickupInstruction: 'Collect the order at the counter and verify the bag is sealed.',
       deliveryNote: note,
       guaranteedEarnings: deliveryFee / 100.0,

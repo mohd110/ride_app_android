@@ -12,6 +12,8 @@ dependencies:
   supabase_flutter: ^2.15.0
   geolocator: ^14.0.3
   flutter_local_notifications: ^22.0.1
+  google_maps_flutter: ^2.17.1
+  audioplayers: ^6.8.0
 
 dev_dependencies:
   flutter_test:
@@ -25,3 +27,4 @@ flutter:
     - assets/images/rider_profile.png
     - assets/images/customer_avatar.png
     - assets/images/delivery_proof.png
+    - assets/sounds/new_order_alert.ogg

@@ -78,6 +78,7 @@ class AppState extends ChangeNotifier {
   Set<String> _knownOrderIds = {};
   bool _hasInitialOrdersSnapshot = false;
   int _newOrderPulse = 0;
+  List<AvailableOrderSummary> _pendingAlertOrders = [];
   ActiveOrderData? _activeOrder;
   RiderProfile _rider = MockData.rider;
 
@@ -110,6 +111,7 @@ class AppState extends ChangeNotifier {
   List<TripData> get tripsHistory => _tripsHistory;
   List<AvailableOrderSummary> get availableOrders => _availableOrders;
   int get newOrderPulse => _newOrderPulse;
+  List<AvailableOrderSummary> get pendingAlertOrders => _pendingAlertOrders;
   bool get hasActiveOrder => _activeOrder != null;
 
   int get unreadNotifications => MockData.notifications.where((n) => !n.isRead).length;
@@ -226,6 +228,10 @@ class AppState extends ChangeNotifier {
   Future<String?> claimOrder(String orderId) async {
     if (_riderId == null || _isClaiming) return 'Not signed in';
 
+    // Stop the alert ring as soon as the rider taps Accept.
+    await NotificationService.instance.stopAlert();
+    _pendingAlertOrders = [];
+
     _isClaiming = true;
     _claimingOrderId = orderId;
     notifyListeners();
@@ -286,9 +292,13 @@ class AppState extends ChangeNotifier {
         restaurant: order.restaurant,
         restaurantAddress: order.restaurantAddress,
         restaurantPhone: order.restaurantPhone,
+        restaurantLat: order.restaurantLat,
+        restaurantLng: order.restaurantLng,
         customerName: order.customerName,
         customerAddress: order.customerAddress,
         customerPhone: order.customerPhone,
+        customerLat: order.customerLat,
+        customerLng: order.customerLng,
         pickupInstruction: order.pickupInstruction,
         deliveryNote: order.deliveryNote,
         guaranteedEarnings: order.guaranteedEarnings,
@@ -468,6 +478,7 @@ class AppState extends ChangeNotifier {
         final newOnes = fetched.where((o) => !_knownOrderIds.contains(o.id)).toList();
         if (newOnes.isNotEmpty) {
           _newOrderPulse++;
+          _pendingAlertOrders = newOnes;
           NotificationService.instance.showNewOrders(newOnes);
         }
       } else {
@@ -488,6 +499,13 @@ class AppState extends ChangeNotifier {
       _errorMessage = 'Could not load available orders';
       _availableOrders = [];
     }
+    notifyListeners();
+  }
+
+  /// Called by the alert overlay when the rider taps Dismiss.
+  Future<void> dismissAlert() async {
+    await NotificationService.instance.stopAlert();
+    _pendingAlertOrders = [];
     notifyListeners();
   }
 
