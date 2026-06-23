@@ -5,6 +5,7 @@ import '../services/order_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_card.dart';
+import '../widgets/new_order_flash_overlay.dart';
 import 'notifications_screen.dart';
 import 'support_screen.dart';
 import 'trip_stats_screen.dart';
@@ -55,6 +56,9 @@ class DashboardTab extends StatelessWidget {
                     backgroundColor: AppColors.primaryDark,
                     child: const Icon(Icons.headset_mic_rounded, color: Colors.white),
                   ),
+                ),
+                Positioned.fill(
+                  child: NewOrderFlashOverlay(pulse: state.newOrderPulse),
                 ),
               ],
             ),

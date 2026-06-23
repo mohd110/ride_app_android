@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_client.dart';
 import 'data/mock_data.dart';
+import 'services/notification_service.dart';
 import 'services/order_service.dart';
 
 enum OrderState {
@@ -74,6 +75,9 @@ class AppState extends ChangeNotifier {
   final List<TripData> _tripsHistory = List.from(MockData.allTrips);
 
   List<AvailableOrderSummary> _availableOrders = [];
+  Set<String> _knownOrderIds = {};
+  bool _hasInitialOrdersSnapshot = false;
+  int _newOrderPulse = 0;
   ActiveOrderData? _activeOrder;
   RiderProfile _rider = MockData.rider;
 
@@ -105,6 +109,7 @@ class AppState extends ChangeNotifier {
   String get recipientName => _recipientName;
   List<TripData> get tripsHistory => _tripsHistory;
   List<AvailableOrderSummary> get availableOrders => _availableOrders;
+  int get newOrderPulse => _newOrderPulse;
   bool get hasActiveOrder => _activeOrder != null;
 
   int get unreadNotifications => MockData.notifications.where((n) => !n.isRead).length;
@@ -450,12 +455,27 @@ class AppState extends ChangeNotifier {
   Future<void> _refreshAvailableOrders() async {
     if (_riderId == null || !_isOnline || hasActiveOrder) {
       _availableOrders = [];
+      _knownOrderIds = {};
+      _hasInitialOrdersSnapshot = false;
       notifyListeners();
       return;
     }
 
     try {
-      _availableOrders = await _orders.fetchAvailableOrders();
+      final fetched = await _orders.fetchAvailableOrders();
+
+      if (_hasInitialOrdersSnapshot) {
+        final newOnes = fetched.where((o) => !_knownOrderIds.contains(o.id)).toList();
+        if (newOnes.isNotEmpty) {
+          _newOrderPulse++;
+          NotificationService.instance.showNewOrders(newOnes);
+        }
+      } else {
+        _hasInitialOrdersSnapshot = true;
+      }
+
+      _availableOrders = fetched;
+      _knownOrderIds = fetched.map((o) => o.id).toSet();
       if (_availableOrders.isNotEmpty) {
         _errorMessage = null;
       }

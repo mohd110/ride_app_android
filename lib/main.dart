@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_config.dart';
 import 'app_state.dart';
+import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'screens/main_navigation.dart';
 
@@ -12,6 +13,8 @@ Future<void> main() async {
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,
   );
+
+  await NotificationService.instance.initialize();
 
   await AppState.instance.initialize();
 
