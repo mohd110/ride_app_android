@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts must always use LF (Unix) line endings
+# so they run correctly on Linux (e.g. Vercel build environment)
+*.sh text eol=lf
