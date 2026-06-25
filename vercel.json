@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": "FLUTTER_VERSION=\"3.44.2\" && FLUTTER_DIR=\"$HOME/flutter-sdk\" && if [ ! -d \"$FLUTTER_DIR\" ]; then git clone https://github.com/flutter/flutter.git -b \"$FLUTTER_VERSION\" --depth 1 \"$FLUTTER_DIR\"; fi && export PATH=\"$FLUTTER_DIR/bin:$PATH\" && flutter config --enable-web --no-analytics && flutter pub get && flutter build web --release",
-  "installCommand": "echo 'Dependencies fetched during build step'",
+  "buildCommand": "bash vercel-build.sh",
+  "installCommand": "echo 'No npm install needed — Flutter deps are fetched in vercel-build.sh'",
   "outputDirectory": "build/web",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
