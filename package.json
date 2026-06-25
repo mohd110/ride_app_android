@@ -1,0 +1,9 @@
+{
+  "name": "riderconnect-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Flutter Web build pipeline for RiderConnect, deployed via Vercel.",
+  "scripts": {
+    "build": "bash vercel-build.sh"
+  }
+}
