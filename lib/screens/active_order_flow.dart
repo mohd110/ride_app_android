@@ -80,38 +80,60 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
           top: 16,
           left: 16,
           right: 16,
-          child: AppCard(
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 20),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        state.navInstruction,
-                        style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppCard(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      Text(
-                        isToCustomer
-                            ? (state.navDurationText.isNotEmpty ? state.navDurationText : 'Live GPS tracking')
-                            : 'Head to restaurant',
-                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                      child: const Icon(Icons.navigation_rounded, color: Colors.white, size: 20),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            state.navInstruction,
+                            style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            _liveDistanceLabel(state, isToCustomer),
+                            style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (state.locationError != null) ...[
+                const SizedBox(height: 8),
+                AppCard(
+                  color: AppColors.error.withOpacity(0.1),
+                  borderColor: AppColors.error.withOpacity(0.4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_off_rounded, color: AppColors.error, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          state.locationError!,
+                          style: const TextStyle(color: AppColors.error, fontSize: 11.5),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
-            ),
+            ],
           ),
         ),
         if (isToCustomer)
@@ -181,6 +203,19 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
         ),
       ],
     );
+  }
+
+  /// Straight-line distance/ETA to whichever leg the rider is currently on.
+  /// Approximate (no live road-routing) — assumes ~25 km/h average moped speed.
+  String _liveDistanceLabel(AppState state, bool isToCustomer) {
+    final km = isToCustomer ? state.distanceToCustomerKm : state.distanceToRestaurantKm;
+    if (km == null) {
+      return isToCustomer
+          ? (state.navDurationText.isNotEmpty ? state.navDurationText : 'Live GPS tracking')
+          : 'Head to restaurant';
+    }
+    final etaMin = (km / 25 * 60).clamp(1, 999).round();
+    return '${km.toStringAsFixed(km < 10 ? 2 : 1)} km away • ~$etaMin min';
   }
 
   Widget _fabBtn(IconData icon, {VoidCallback? onTap}) {

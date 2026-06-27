@@ -63,10 +63,16 @@ class AppState extends ChangeNotifier {
   int _batteryLevel = 82;
 
   double _gpsProgress = 0.0;
-  Timer? _gpsTimer;
+  Timer? _presenceTimer;
   String _navInstruction = 'Head to pickup location';
   String _navDistanceText = '';
   String _navDurationText = '';
+  double? _riderLat;
+  double? _riderLng;
+  double? _distanceToRestaurantKm;
+  double? _distanceToCustomerKm;
+  String? _locationError;
+  double _pricePerKm = 10.0;
 
   List<Map<String, String>> _checklistItems = [];
   List<bool> _verifiedItems = [];
@@ -104,6 +110,12 @@ class AppState extends ChangeNotifier {
   String get navInstruction => _navInstruction;
   String get navDistanceText => _navDistanceText;
   String get navDurationText => _navDurationText;
+  double? get riderLat => _riderLat;
+  double? get riderLng => _riderLng;
+  double? get distanceToRestaurantKm => _distanceToRestaurantKm;
+  double? get distanceToCustomerKm => _distanceToCustomerKm;
+  String? get locationError => _locationError;
+  double get pricePerKm => _pricePerKm;
   List<bool> get verifiedItems => _verifiedItems;
   List<Map<String, String>> get checklistItems => _checklistItems;
   bool get hasPhotoProof => _hasPhotoProof;
@@ -133,12 +145,14 @@ class AppState extends ChangeNotifier {
     if (profileError != null) {
       _errorMessage = profileError;
     }
+    await _fetchPricePerKm();
     await _syncActiveOrder();
     if (!hasActiveOrder) {
       await goOnline();
     } else {
       _errorMessage =
           'You have an active delivery in progress. Finish it to see new orders.';
+      await _startPresenceTracking();
     }
     notifyListeners();
   }
@@ -167,9 +181,12 @@ class AppState extends ChangeNotifier {
       final profileError = await _loadProfile();
       if (profileError != null) return profileError;
 
+      await _fetchPricePerKm();
       await _syncActiveOrder();
       if (!hasActiveOrder) {
         await goOnline();
+      } else {
+        await _startPresenceTracking();
       }
       return null;
     } on AuthException catch (e) {
@@ -184,7 +201,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     await _teardownRealtime();
-    _gpsTimer?.cancel();
+    await _stopPresenceTracking(markOffline: true);
     await supabase.auth.signOut();
 
     _isLoggedIn = false;
@@ -214,12 +231,14 @@ class AppState extends ChangeNotifier {
 
     await _refreshAvailableOrders();
     _subscribeToOrders();
+    await _startPresenceTracking();
   }
 
   Future<void> goOffline() async {
     _isOnline = false;
     if (!hasActiveOrder) {
       _orderState = OrderState.idle;
+      await _stopPresenceTracking(markOffline: true);
     }
     await _teardownRealtime();
     notifyListeners();
@@ -264,7 +283,6 @@ class AppState extends ChangeNotifier {
   }
 
   void arrivedAtRestaurant() {
-    _gpsTimer?.cancel();
     _orderState = OrderState.verifyItems;
     for (int i = 0; i < _verifiedItems.length; i++) {
       _verifiedItems[i] = false;
@@ -312,7 +330,6 @@ class AppState extends ChangeNotifier {
       _gpsProgress = 0.0;
       _navInstruction = 'Deliver to ${order.customerName}';
       notifyListeners();
-      await _startLocationTracking();
       return null;
     } catch (e) {
       return 'Could not start delivery. Please try again.';
@@ -320,7 +337,6 @@ class AppState extends ChangeNotifier {
   }
 
   void arrivedAtCustomer() {
-    _stopLocationTracking();
     _orderState = OrderState.confirmDelivery;
     _hasPhotoProof = false;
     _recipientName = _activeOrder?.customerName ?? '';
@@ -343,7 +359,8 @@ class AppState extends ChangeNotifier {
 
     try {
       await _orders.markDelivered(order.rawId);
-      _stopLocationTracking();
+      _distanceToRestaurantKm = null;
+      _distanceToCustomerKm = null;
       _orderState = OrderState.completed;
 
       final payout = order.guaranteedEarnings;
@@ -423,10 +440,6 @@ class AppState extends ChangeNotifier {
 
     _setupChecklistFromActiveOrder();
     _orderState = _orderStateFromStatus(_activeOrder!.status);
-
-    if (_orderState == OrderState.navToCustomer) {
-      await _startLocationTracking();
-    }
   }
 
   OrderState _orderStateFromStatus(String status) {
@@ -527,54 +540,123 @@ class AppState extends ChangeNotifier {
     _ordersChannel = null;
   }
 
-  Future<void> _startLocationTracking() async {
-    final order = _activeOrder;
-    final riderId = _riderId;
-    if (order == null || riderId == null) return;
+  Future<void> _fetchPricePerKm() async {
+    _pricePerKm = await _orders.fetchPricePerKm();
+  }
 
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      final requested = await Geolocator.requestPermission();
-      if (requested == LocationPermission.denied ||
-          requested == LocationPermission.deniedForever) {
-        return;
-      }
+  /// Runs continuously for as long as the rider is online OR mid-delivery —
+  /// not just during the "navigate to customer" leg. This is what lets the
+  /// rider show up as a live dot for the admin dashboard while idle/browsing,
+  /// and what lets a restaurant see the rider approaching for pickup, not
+  /// just after pickup.
+  Future<void> _startPresenceTracking() async {
+    final riderId = _riderId;
+    if (riderId == null) return;
+
+    final hasPermission = await _ensureLocationPermission();
+    if (!hasPermission) {
+      _locationError =
+          'Location permission denied. Your live location and distance-based '
+          'earnings won\'t update until location access is allowed.';
+      notifyListeners();
+      return;
     }
 
-    _gpsTimer?.cancel();
-    await _pushLocation(order.rawId, riderId);
+    _presenceTimer?.cancel();
+    await _pushPresence(riderId);
 
-    _gpsTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (_orderState != OrderState.navToCustomer) {
-        _stopLocationTracking();
+    _presenceTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!_isOnline && !hasActiveOrder) {
+        _stopPresenceTracking(markOffline: false);
         return;
       }
-      await _pushLocation(order.rawId, riderId);
+      await _pushPresence(riderId);
     });
   }
 
-  Future<void> _pushLocation(String orderId, String riderId) async {
+  Future<bool> _ensureLocationPermission() async {
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return false;
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
+  }
+
+  Future<void> _pushPresence(String riderId) async {
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
       );
+
+      final order = _activeOrder;
+      final status = order != null ? 'delivering' : (_isOnline ? 'online' : 'idle');
+
       await _orders.upsertLocation(
-        orderId: orderId,
         riderId: riderId,
+        orderId: order?.rawId,
         latitude: pos.latitude,
         longitude: pos.longitude,
+        status: status,
       );
-      _gpsProgress = (_gpsProgress + 0.05).clamp(0.0, 1.0);
-      _navDistanceText = 'GPS active';
-      _navDurationText = 'Live tracking';
-      notifyListeners();
-    } catch (_) {
-      // Location may be unavailable on simulator — delivery flow still works.
+
+      _riderLat = pos.latitude;
+      _riderLng = pos.longitude;
+      _locationError = null;
+      _updateLiveDistances(pos.latitude, pos.longitude);
+
+      if (_orderState == OrderState.navToRestaurant || _orderState == OrderState.navToCustomer) {
+        _gpsProgress = (_gpsProgress + 0.05).clamp(0.0, 1.0);
+        _navDistanceText = 'GPS active';
+        _navDurationText = 'Live tracking';
+      }
+    } catch (e) {
+      // Surfaced to the UI rather than swallowed — a silent failure here
+      // looks identical to "rider's GPS isn't working" from the outside,
+      // which was the actual root cause of the original bug report.
+      _locationError = 'Could not read GPS position. Check that location '
+          'services are turned on and permission is granted.';
     }
+    notifyListeners();
   }
 
-  void _stopLocationTracking() {
-    _gpsTimer?.cancel();
-    _gpsTimer = null;
+  void _updateLiveDistances(double lat, double lng) {
+    final order = _activeOrder;
+    if (order == null) {
+      _distanceToRestaurantKm = null;
+      _distanceToCustomerKm = null;
+      return;
+    }
+
+    _distanceToRestaurantKm = (order.restaurantLat != null && order.restaurantLng != null)
+        ? Geolocator.distanceBetween(lat, lng, order.restaurantLat!, order.restaurantLng!) / 1000.0
+        : null;
+
+    _distanceToCustomerKm = (order.customerLat != null && order.customerLng != null)
+        ? Geolocator.distanceBetween(lat, lng, order.customerLat!, order.customerLng!) / 1000.0
+        : null;
+  }
+
+  Future<void> _stopPresenceTracking({required bool markOffline}) async {
+    _presenceTimer?.cancel();
+    _presenceTimer = null;
+
+    final riderId = _riderId;
+    if (markOffline && riderId != null && _riderLat != null && _riderLng != null) {
+      try {
+        await _orders.upsertLocation(
+          riderId: riderId,
+          orderId: null,
+          latitude: _riderLat!,
+          longitude: _riderLng!,
+          status: 'offline',
+        );
+      } catch (_) {
+        // Best-effort — nothing actionable if this fails on the way out.
+      }
+    }
   }
 }

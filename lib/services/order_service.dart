@@ -105,22 +105,45 @@ class OrderService {
     await supabase.from('orders').update({'status': 'delivered'}).eq('id', orderId);
   }
 
+  /// Upserts the rider's current position, keyed by [riderId] so a single
+  /// row tracks them whether they're idle, browsing for orders, or
+  /// delivering — [orderId] is null except while actively on a delivery.
   Future<void> upsertLocation({
-    required String orderId,
     required String riderId,
+    String? orderId,
     required double latitude,
     required double longitude,
+    required String status,
   }) async {
     await supabase.from('rider_locations').upsert({
-      'order_id': orderId,
       'rider_id': riderId,
+      'order_id': orderId,
       'latitude': latitude,
       'longitude': longitude,
+      'status': status,
       'updated_at': DateTime.now().toUtc().toIso8601String(),
-    }, onConflict: 'order_id');
+    }, onConflict: 'rider_id');
   }
 
   Future<Map<String, dynamic>?> fetchProfile(String userId) async {
     return await supabase.from('profiles').select().eq('id', userId).maybeSingle();
+  }
+
+  /// The current per-km delivery rate, admin-configurable from the
+  /// restaurant dashboard. Falls back to ₹10/km if the settings row or
+  /// the table itself isn't reachable (e.g. migration not yet applied).
+  Future<double> fetchPricePerKm() async {
+    try {
+      final row = await supabase
+          .from('delivery_settings')
+          .select('price_per_km')
+          .eq('id', 1)
+          .maybeSingle();
+      final value = row?['price_per_km'];
+      if (value is num) return value.toDouble();
+      return 10.0;
+    } catch (_) {
+      return 10.0;
+    }
   }
 }
