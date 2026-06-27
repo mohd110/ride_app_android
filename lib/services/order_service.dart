@@ -70,16 +70,22 @@ class OrderService {
         .toList();
   }
 
+  /// A rider should only ever have one order in flight, but this is
+  /// defensive against that invariant being violated (e.g. a claim that
+  /// got interrupted before completion) — picks the most recent rather
+  /// than using maybeSingle(), which throws outright if more than one
+  /// row matches instead of just picking one.
   Future<ActiveOrderData?> fetchActiveOrder(String riderId) async {
-    final row = await supabase
+    final rows = await supabase
         .from('orders')
         .select(_orderSelect)
         .eq('rider_id', riderId)
         .not('status', 'in', ['delivered', 'cancelled'])
-        .maybeSingle();
+        .order('created_at', ascending: false)
+        .limit(1);
 
-    if (row == null) return null;
-    return ActiveOrderData.fromSupabase(row);
+    if ((rows as List).isEmpty) return null;
+    return ActiveOrderData.fromSupabase(rows.first as Map<String, dynamic>);
   }
 
   /// Returns null on success, or an error message.
