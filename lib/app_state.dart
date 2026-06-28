@@ -19,23 +19,73 @@ enum OrderState {
 }
 
 class TripData {
+  final String rawId;
   final String id;
   final String restaurant;
-  final String time;
+  final String restaurantAddress;
+  final String dropoffAddress;
+  final DateTime? deliveredAt;
   final double payout;
-  final double tip;
-  final String distance;
-  final String duration;
+  final double distanceKm;
+  final List<OrderLineItem> items;
 
   TripData({
+    required this.rawId,
     required this.id,
     required this.restaurant,
-    required this.time,
+    required this.restaurantAddress,
+    required this.dropoffAddress,
+    this.deliveredAt,
     required this.payout,
-    required this.tip,
-    required this.distance,
-    required this.duration,
+    required this.distanceKm,
+    required this.items,
   });
+
+  factory TripData.fromSupabase(Map<String, dynamic> json) {
+    final restaurant = json['restaurants'] as Map<String, dynamic>?;
+    final delivery = json['delivery_address'] as Map<String, dynamic>? ?? {};
+    final rawId = json['id'] as String;
+    final items = (json['order_items'] as List<dynamic>? ?? [])
+        .map((item) {
+          final row = item as Map<String, dynamic>;
+          final product = row['products'] as Map<String, dynamic>?;
+          return OrderLineItem(
+            name: product?['name'] as String? ?? 'Item',
+            subtitle: product?['description'] as String? ?? '',
+            qty: '${row['quantity']}×',
+          );
+        })
+        .toList();
+
+    return TripData(
+      rawId: rawId,
+      id: '#${rawId.substring(0, 8).toUpperCase()}',
+      restaurant: restaurant?['name'] as String? ?? 'Restaurant',
+      restaurantAddress: restaurant?['address'] as String? ?? '',
+      dropoffAddress: delivery['address'] as String? ?? '',
+      deliveredAt: DateTime.tryParse(json['delivered_at'] as String? ?? ''),
+      payout: (json['rider_payment'] as num?)?.toDouble() ?? 0,
+      distanceKm: (json['delivery_distance_km'] as num?)?.toDouble() ?? 0,
+      items: items,
+    );
+  }
+
+  /// "Today • 14:22" / "Yesterday • 19:30" / "Jun 11 • 18:55" — matches the
+  /// format the UI already expects/parses elsewhere.
+  String get time {
+    final d = deliveredAt?.toLocal();
+    if (d == null) return '—';
+    final now = DateTime.now();
+    final hh = d.hour.toString().padLeft(2, '0');
+    final mm = d.minute.toString().padLeft(2, '0');
+    bool sameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+    if (sameDay(d, now)) return 'Today • $hh:$mm';
+    if (sameDay(d, now.subtract(const Duration(days: 1)))) return 'Yesterday • $hh:$mm';
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${months[d.month - 1]} ${d.day} • $hh:$mm';
+  }
+
+  String get distance => distanceKm > 0 ? '${distanceKm.toStringAsFixed(1)} km' : '—';
 }
 
 class AppState extends ChangeNotifier {
@@ -56,12 +106,9 @@ class AppState extends ChangeNotifier {
   int _currentTab = 0;
   OrderState _orderState = OrderState.idle;
 
-  double _weeklyEarnings = 1248.50;
-  double _todayEarnings = 142.50;
-  double _deliveryFees = 98.00;
-  double _tips = 34.50;
-  double _incentives = 10.00;
-  int _deliveriesCount = 18;
+  EarningsSummary _earningsSummary = const EarningsSummary();
+  List<DailyEarningsPoint> _dailyEarnings = [];
+  List<RiderPayout> _payouts = [];
   double _onlineHours = 38.5;
   int _batteryLevel = 82;
 
@@ -84,7 +131,7 @@ class AppState extends ChangeNotifier {
   String? _deliveryProofUrl;
   bool _isUploadingPhoto = false;
   String _recipientName = '';
-  final List<TripData> _tripsHistory = List.from(MockData.allTrips);
+  List<TripData> _tripsHistory = [];
 
   List<AvailableOrderSummary> _availableOrders = [];
   Set<String> _knownOrderIds = {};
@@ -104,12 +151,16 @@ class AppState extends ChangeNotifier {
   int get currentTab => _currentTab;
   OrderState get orderState => _orderState;
 
-  double get weeklyEarnings => _weeklyEarnings;
-  double get todayEarnings => _todayEarnings;
-  double get deliveryFees => _deliveryFees;
-  double get tips => _tips;
-  double get incentives => _incentives;
-  int get deliveriesCount => _deliveriesCount;
+  EarningsSummary get earningsSummary => _earningsSummary;
+  double get todayEarnings => _earningsSummary.todayEarnings;
+  double get weeklyEarnings => _earningsSummary.weekEarnings;
+  double get monthlyEarnings => _earningsSummary.monthEarnings;
+  double get lifetimeEarnings => _earningsSummary.lifetimeEarnings;
+  int get todayOrders => _earningsSummary.todayOrders;
+  int get deliveriesCount => _earningsSummary.totalOrders;
+  double get walletBalance => _earningsSummary.walletBalance;
+  List<DailyEarningsPoint> get dailyEarnings => _dailyEarnings;
+  List<RiderPayout> get payouts => _payouts;
   double get onlineHours => _onlineHours;
   int get batteryLevel => _batteryLevel;
   double get gpsProgress => _gpsProgress;
@@ -154,6 +205,7 @@ class AppState extends ChangeNotifier {
 
     _isLoggedIn = true;
     _riderId = session.user.id;
+    await _loadEarningsData();
     final profileError = await _loadProfile();
     if (profileError != null) {
       _errorMessage = profileError;
@@ -193,6 +245,7 @@ class AppState extends ChangeNotifier {
       _currentTab = 0;
       _orderState = OrderState.idle;
 
+      await _loadEarningsData();
       final profileError = await _loadProfile();
       if (profileError != null) return profileError;
 
@@ -231,6 +284,10 @@ class AppState extends ChangeNotifier {
     _activeOrder = null;
     _rider = MockData.rider;
     _notifications = [];
+    _earningsSummary = const EarningsSummary();
+    _dailyEarnings = [];
+    _tripsHistory = [];
+    _payouts = [];
     notifyListeners();
   }
 
@@ -414,25 +471,14 @@ class AppState extends ChangeNotifier {
       // (e.g. missing coordinates).
       final payout = actualPayment ?? order.guaranteedEarnings;
       _lastPayout = payout;
-      _weeklyEarnings += payout;
-      _todayEarnings += payout;
-      _deliveriesCount += 1;
-      _deliveryFees += payout;
       _batteryLevel = (_batteryLevel - 6).clamp(5, 100);
+      notifyListeners();
 
-      _tripsHistory.insert(
-        0,
-        TripData(
-          id: order.id,
-          restaurant: order.restaurant,
-          time: 'Just now',
-          payout: payout,
-          tip: 0,
-          distance: order.distance,
-          duration: '—',
-        ),
-      );
-
+      // Re-fetch from the database rather than incrementing in-memory —
+      // the server-computed rider_payment is the source of truth, and this
+      // keeps today/week/month/lifetime and the history list consistent
+      // with each other instead of drifting apart.
+      await _loadEarningsData();
       notifyListeners();
       return null;
     } catch (e) {
@@ -467,13 +513,38 @@ class AppState extends ChangeNotifier {
       fleetId: 'RDR',
       memberSince: '—',
       rating: 5.0,
-      completedTasks: _deliveriesCount,
-      totalEarnings: _weeklyEarnings,
+      completedTasks: _earningsSummary.totalOrders,
+      totalEarnings: _earningsSummary.lifetimeEarnings,
       activeHours: '—',
       deviceId: '—',
       avatarUrl: profile['avatar_url'] as String?,
     );
     return null;
+  }
+
+  /// Loads everything the earnings/history/wallet screens show, straight
+  /// from the database — today/week/month/lifetime totals, the daily
+  /// series for the chart, full delivered-order history, and payout
+  /// records. Called on login/init and again after every completed
+  /// delivery, instead of incrementing in-memory counters that used to
+  /// reset to hardcoded numbers on every login.
+  Future<void> _loadEarningsData() async {
+    final riderId = _riderId;
+    if (riderId == null) return;
+
+    final results = await Future.wait([
+      _orders.fetchEarningsSummary(),
+      _orders.fetchDailyEarnings(),
+      _orders.fetchOrderHistory(riderId),
+      _orders.fetchPayouts(riderId),
+    ]);
+
+    _earningsSummary = results[0] as EarningsSummary;
+    _dailyEarnings = results[1] as List<DailyEarningsPoint>;
+    _tripsHistory = (results[2] as List<Map<String, dynamic>>)
+        .map((row) => TripData.fromSupabase(row))
+        .toList();
+    _payouts = results[3] as List<RiderPayout>;
   }
 
   /// Opens the camera or gallery, uploads the photo to Supabase Storage,

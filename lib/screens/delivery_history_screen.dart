@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
-import '../data/mock_data.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_card.dart';
 import 'order_details_screen.dart';
@@ -15,41 +14,48 @@ class DeliveryHistoryScreen extends StatefulWidget {
 class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
   String _activeFilter = 'All Time';
 
+  bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+
+  DateTime _startOfWeek(DateTime now) {
+    final startOfToday = DateTime(now.year, now.month, now.day);
+    // ISO weeks start Monday (weekday == 1), matching Postgres's date_trunc('week', ...).
+    return startOfToday.subtract(Duration(days: startOfToday.weekday - 1));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: AppState.instance,
       builder: (context, _) {
         final state = AppState.instance;
+        final now = DateTime.now();
+        final startOfWeek = _startOfWeek(now);
 
-        final rider = MockData.rider;
-
-        List<TripData> filteredTrips = state.tripsHistory;
-        double displayEarnings = state.weeklyEarnings;
-        int displayDeliveries = 142;
-        String displayHours = '58.5';
+        List<TripData> filteredTrips;
+        double displayEarnings;
+        int displayDeliveries;
 
         if (_activeFilter == 'Today') {
-          filteredTrips = state.tripsHistory.where((t) => t.time.startsWith('Today')).toList();
+          filteredTrips = state.tripsHistory.where((t) => t.deliveredAt != null && _isSameDay(t.deliveredAt!.toLocal(), now)).toList();
           displayEarnings = state.todayEarnings;
-          displayDeliveries = filteredTrips.length;
-          displayHours = '5.4';
+          displayDeliveries = state.todayOrders;
         } else if (_activeFilter == 'This Week') {
-          filteredTrips = state.tripsHistory;
+          filteredTrips = state.tripsHistory.where((t) => t.deliveredAt != null && t.deliveredAt!.toLocal().isAfter(startOfWeek)).toList();
           displayEarnings = state.weeklyEarnings;
-          displayDeliveries = 142;
-          displayHours = '58.5';
-        } else if (_activeFilter == 'Range') {
-          filteredTrips = state.tripsHistory.take(6).toList();
-          displayEarnings = 86.50;
-          displayDeliveries = 6;
-          displayHours = '12.5';
+          displayDeliveries = filteredTrips.length;
+        } else if (_activeFilter == 'This Month') {
+          filteredTrips = state.tripsHistory
+              .where((t) => t.deliveredAt != null && t.deliveredAt!.toLocal().year == now.year && t.deliveredAt!.toLocal().month == now.month)
+              .toList();
+          displayEarnings = state.monthlyEarnings;
+          displayDeliveries = filteredTrips.length;
         } else {
           filteredTrips = state.tripsHistory;
-          displayEarnings = 18450.00;
-          displayDeliveries = rider.completedTasks;
-          displayHours = rider.activeHours;
+          displayEarnings = state.lifetimeEarnings;
+          displayDeliveries = state.deliveriesCount;
         }
+
+        final avgPerOrder = displayDeliveries > 0 ? displayEarnings / displayDeliveries : 0.0;
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -75,9 +81,9 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
                       AppCard(
                         child: Column(
                           children: [
-                            const Text(
-                              'TOTAL EARNINGS THIS WEEK',
-                              style: TextStyle(
+                            Text(
+                              'EARNINGS — ${_activeFilter.toUpperCase()}',
+                              style: const TextStyle(
                                 color: AppColors.textMuted,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -102,14 +108,22 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
                               children: [
                                 _buildStatCol('$displayDeliveries', 'Deliveries'),
                                 Container(width: 1, height: 30, color: AppColors.border),
-                                _buildStatCol(displayHours, 'Online Hrs'),
+                                _buildStatCol('₹${avgPerOrder.toStringAsFixed(2)}', 'Avg/Order'),
                               ],
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 24),
-                      ...filteredTrips.map((trip) => _buildTripTile(context, trip)),
+                      if (filteredTrips.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 32),
+                          child: Center(
+                            child: Text('No deliveries in this period', style: TextStyle(color: AppColors.textMuted)),
+                          ),
+                        )
+                      else
+                        ...filteredTrips.map((trip) => _buildTripTile(context, trip)),
                     ],
                   ),
                 ),
@@ -134,7 +148,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
           _buildFilter('All Time'),
           _buildFilter('Today'),
           _buildFilter('This Week'),
-          _buildFilter('Range'),
+          _buildFilter('This Month'),
         ],
       ),
     );
@@ -185,10 +199,12 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
               builder: (_) => OrderDetailsScreen(
                 orderId: trip.id,
                 restaurantName: trip.restaurant,
-                dropoffAddress: '402 Oakwood Residency, Block B',
+                restaurantAddress: trip.restaurantAddress,
+                dropoffAddress: trip.dropoffAddress,
                 payout: trip.payout,
-                tip: trip.tip,
                 distance: trip.distance,
+                items: trip.items,
+                isHistorical: true,
               ),
             ),
           );

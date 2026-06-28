@@ -3,7 +3,7 @@ description: Rider Connect App - Hybrid Mobile and Web Simulator.
 version: 4.2.1+1
 
 environment:
-  sdk: ">=2.12.0 <4.0.0"
+  sdk: ">=3.0.0 <4.0.0"
 
 dependencies:
   flutter:

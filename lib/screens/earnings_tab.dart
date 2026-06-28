@@ -8,6 +8,7 @@ import 'delivery_history_screen.dart';
 import 'order_details_screen.dart';
 import 'notifications_screen.dart';
 import 'income_detail_screen.dart';
+import 'payment_info_screen.dart';
 
 class EarningsTab extends StatefulWidget {
   const EarningsTab({Key? key}) : super(key: key);
@@ -25,6 +26,17 @@ class _EarningsTabState extends State<EarningsTab> {
       animation: AppState.instance,
       builder: (context, _) {
         final state = AppState.instance;
+
+        final periodLabel = switch (_chartType) {
+          'weekly' => 'THIS WEEK',
+          'monthly' => 'THIS MONTH',
+          _ => 'TODAY',
+        };
+        final periodEarnings = switch (_chartType) {
+          'weekly' => state.weeklyEarnings,
+          'monthly' => state.monthlyEarnings,
+          _ => state.todayEarnings,
+        };
 
         return Scaffold(
           backgroundColor: AppColors.background,
@@ -48,9 +60,9 @@ class _EarningsTabState extends State<EarningsTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'TOTAL EARNINGS',
-                          style: TextStyle(
+                        Text(
+                          periodLabel,
+                          style: const TextStyle(
                             color: AppColors.textMuted,
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
@@ -59,7 +71,7 @@ class _EarningsTabState extends State<EarningsTab> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '₹${state.todayEarnings.toStringAsFixed(2)}',
+                          '₹${periodEarnings.toStringAsFixed(2)}',
                           style: const TextStyle(
                             color: AppColors.primary,
                             fontSize: 32,
@@ -67,15 +79,9 @@ class _EarningsTabState extends State<EarningsTab> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Row(
-                          children: const [
-                            Icon(Icons.trending_up_rounded, color: AppColors.success, size: 14),
-                            SizedBox(width: 4),
-                            Text(
-                              '12% higher than yesterday',
-                              style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
-                            ),
-                          ],
+                        Text(
+                          '${state.todayOrders} deliveries today • ${state.deliveriesCount} total',
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 11),
                         ),
                       ],
                     ),
@@ -83,9 +89,9 @@ class _EarningsTabState extends State<EarningsTab> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _buildStatCard(Icons.pedal_bike_rounded, 'Deliveries', '${state.deliveriesCount}')),
+                      Expanded(child: _buildStatCard(Icons.pedal_bike_rounded, 'Total Deliveries', '${state.deliveriesCount}')),
                       const SizedBox(width: 12),
-                      Expanded(child: _buildStatCard(Icons.access_time_rounded, 'Online Time', '6h 45m')),
+                      Expanded(child: _buildStatCard(Icons.account_balance_wallet_rounded, 'Wallet Balance', '₹${state.walletBalance.toStringAsFixed(2)}')),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -97,7 +103,7 @@ class _EarningsTabState extends State<EarningsTab> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: const [
                             Text(
-                              'Hourly Trend',
+                              'Earnings Trend',
                               style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontSize: 14,
@@ -109,15 +115,14 @@ class _EarningsTabState extends State<EarningsTab> {
                         ),
                         EarningsChart(
                           chartType: _chartType,
-                          todayEarnings: state.todayEarnings,
-                          weeklyEarnings: state.weeklyEarnings,
+                          dailyEarnings: state.dailyEarnings,
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: 20),
                   const Text(
-                    'Income Breakdown',
+                    'Income Summary',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 15,
@@ -130,54 +135,37 @@ class _EarningsTabState extends State<EarningsTab> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => IncomeDetailScreen(
-                          title: 'Delivery Fees',
-                          amount: '₹${state.deliveryFees.toStringAsFixed(2)}',
-                          description: 'Base pay for ${state.deliveriesCount} completed trips',
+                          title: 'Trip Earnings',
+                          amount: '₹${state.lifetimeEarnings.toStringAsFixed(2)}',
+                          description: 'Lifetime earnings across ${state.deliveriesCount} completed deliveries',
                           lineItems: [
-                            {'label': 'Short trips (< 3 km)', 'value': '₹42.00'},
-                            {'label': 'Medium trips (3–6 km)', 'value': '₹38.00'},
-                            {'label': 'Long trips (> 6 km)', 'value': '₹18.00'},
+                            {'label': 'Today', 'value': '₹${state.todayEarnings.toStringAsFixed(2)}'},
+                            {'label': 'This week', 'value': '₹${state.weeklyEarnings.toStringAsFixed(2)}'},
+                            {'label': 'This month', 'value': '₹${state.monthlyEarnings.toStringAsFixed(2)}'},
                           ],
                         ),
                       ),
                     ),
-                    child: _buildBreakdownItem(Icons.payments_rounded, 'Delivery Fees', 'Base pay for ${state.deliveriesCount} trips', '₹${state.deliveryFees.toStringAsFixed(2)}'),
+                    child: _buildBreakdownItem(
+                      Icons.payments_rounded,
+                      'Trip Earnings (Lifetime)',
+                      '${state.deliveriesCount} completed deliveries',
+                      '₹${state.lifetimeEarnings.toStringAsFixed(2)}',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   InkWell(
                     onTap: () => Navigator.push(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => IncomeDetailScreen(
-                          title: 'Tips',
-                          amount: '₹${state.tips.toStringAsFixed(2)}',
-                          description: 'Customer appreciation from ${state.deliveriesCount} deliveries',
-                          lineItems: [
-                            {'label': 'Cash tips', 'value': '₹12.50'},
-                            {'label': 'In-app tips', 'value': '₹22.00'},
-                          ],
-                        ),
-                      ),
+                      MaterialPageRoute(builder: (_) => const PaymentInfoScreen()),
                     ),
-                    child: _buildBreakdownItem(Icons.volunteer_activism_rounded, 'Tips', 'Customer appreciation', '₹${state.tips.toStringAsFixed(2)}', valueColor: AppColors.success),
-                  ),
-                  const SizedBox(height: 8),
-                  InkWell(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => IncomeDetailScreen(
-                          title: 'Incentives',
-                          amount: '₹${state.incentives.toStringAsFixed(2)}',
-                          description: 'Peak hour and zone bonuses',
-                          lineItems: [
-                            {'label': 'Peak Hour Bonus (4–6 PM)', 'value': '₹7.00'},
-                            {'label': 'Downtown surge', 'value': '₹3.00'},
-                          ],
-                        ),
-                      ),
+                    child: _buildBreakdownItem(
+                      Icons.account_balance_wallet_rounded,
+                      'Wallet Balance',
+                      'Not yet included in a payout',
+                      '₹${state.walletBalance.toStringAsFixed(2)}',
+                      valueColor: AppColors.success,
                     ),
-                    child: _buildIncentiveCard(state.incentives),
                   ),
                   const SizedBox(height: 20),
                   Row(
@@ -209,7 +197,15 @@ class _EarningsTabState extends State<EarningsTab> {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  ...state.tripsHistory.take(5).map((trip) => _buildTripCard(context, trip)),
+                  if (state.tripsHistory.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24),
+                      child: Center(
+                        child: Text('No deliveries yet', style: TextStyle(color: AppColors.textMuted)),
+                      ),
+                    )
+                  else
+                    ...state.tripsHistory.take(5).map((trip) => _buildTripCard(context, trip)),
                   const SizedBox(height: 20),
                 ],
               ),
@@ -321,43 +317,6 @@ class _EarningsTabState extends State<EarningsTab> {
     );
   }
 
-  Widget _buildIncentiveCard(double amount) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.primary,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: AppColors.primaryDark,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.military_tech_rounded, color: Colors.white, size: 20),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Incentives', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13)),
-                Text('Peak Hour Bonus (4pm - 6pm)', style: TextStyle(color: AppColors.surfaceAccent, fontSize: 11)),
-              ],
-            ),
-          ),
-          Text(
-            '₹${amount.toStringAsFixed(2)}',
-            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildTripCard(BuildContext context, TripData trip) {
     return InkWell(
       onTap: () {
@@ -366,10 +325,12 @@ class _EarningsTabState extends State<EarningsTab> {
             builder: (_) => OrderDetailsScreen(
               orderId: trip.id,
               restaurantName: trip.restaurant,
-              dropoffAddress: '402 Oakwood Residency, Block B, West End Heights',
+              restaurantAddress: trip.restaurantAddress,
+              dropoffAddress: trip.dropoffAddress,
               payout: trip.payout,
-              tip: trip.tip,
               distance: trip.distance,
+              items: trip.items,
+              isHistorical: true,
             ),
           ),
         );
@@ -398,21 +359,9 @@ class _EarningsTabState extends State<EarningsTab> {
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '₹${trip.payout.toStringAsFixed(2)}',
-                  style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  trip.tip > 0 ? '+₹${trip.tip.toStringAsFixed(2)} Tip' : 'No Tip',
-                  style: TextStyle(
-                    color: trip.tip > 0 ? AppColors.success : AppColors.textMuted,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
+            Text(
+              '₹${trip.payout.toStringAsFixed(2)}',
+              style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700),
             ),
           ],
         ),

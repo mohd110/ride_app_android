@@ -195,7 +195,7 @@ class DashboardTab extends StatelessWidget {
                 child: InkWell(
                   onTap: () => AppState.instance.setTab(1),
                   borderRadius: BorderRadius.circular(16),
-                  child: _buildMiniStat(Icons.local_shipping_rounded, 'Orders', '${MockData.todayStats['orders']}'),
+                  child: _buildMiniStat(Icons.local_shipping_rounded, 'Orders', '${AppState.instance.todayOrders}'),
                 ),
               ),
             ],

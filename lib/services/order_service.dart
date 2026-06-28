@@ -68,7 +68,142 @@ class AvailableOrderSummary {
   }
 }
 
+class EarningsSummary {
+  final double todayEarnings;
+  final double weekEarnings;
+  final double monthEarnings;
+  final double lifetimeEarnings;
+  final int todayOrders;
+  final int totalOrders;
+  final double walletBalance;
+
+  const EarningsSummary({
+    this.todayEarnings = 0,
+    this.weekEarnings = 0,
+    this.monthEarnings = 0,
+    this.lifetimeEarnings = 0,
+    this.todayOrders = 0,
+    this.totalOrders = 0,
+    this.walletBalance = 0,
+  });
+
+  factory EarningsSummary.fromJson(Map<String, dynamic> json) {
+    return EarningsSummary(
+      todayEarnings: (json['today_earnings'] as num?)?.toDouble() ?? 0,
+      weekEarnings: (json['week_earnings'] as num?)?.toDouble() ?? 0,
+      monthEarnings: (json['month_earnings'] as num?)?.toDouble() ?? 0,
+      lifetimeEarnings: (json['lifetime_earnings'] as num?)?.toDouble() ?? 0,
+      todayOrders: (json['today_orders'] as num?)?.toInt() ?? 0,
+      totalOrders: (json['total_orders'] as num?)?.toInt() ?? 0,
+      walletBalance: (json['wallet_balance'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+class DailyEarningsPoint {
+  final DateTime day;
+  final double total;
+
+  const DailyEarningsPoint({required this.day, required this.total});
+
+  factory DailyEarningsPoint.fromJson(Map<String, dynamic> json) {
+    return DailyEarningsPoint(
+      day: DateTime.parse(json['day'] as String),
+      total: (json['total'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+class RiderPayout {
+  final String id;
+  final double amount;
+  final String status;
+  final DateTime periodStart;
+  final DateTime periodEnd;
+  final DateTime? paidAt;
+  final DateTime createdAt;
+
+  const RiderPayout({
+    required this.id,
+    required this.amount,
+    required this.status,
+    required this.periodStart,
+    required this.periodEnd,
+    this.paidAt,
+    required this.createdAt,
+  });
+
+  factory RiderPayout.fromJson(Map<String, dynamic> json) {
+    return RiderPayout(
+      id: json['id'] as String,
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      status: json['status'] as String? ?? 'pending',
+      periodStart: DateTime.parse(json['period_start'] as String),
+      periodEnd: DateTime.parse(json['period_end'] as String),
+      paidAt: json['paid_at'] != null ? DateTime.tryParse(json['paid_at'] as String) : null,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+}
+
 class OrderService {
+  /// Today/week/month/lifetime earnings, order counts, and unpaid wallet
+  /// balance — computed server-side straight from orders.rider_payment via
+  /// the get_my_earnings_summary RPC (migration 009), always scoped to the
+  /// calling rider. Replaces what used to be hardcoded numbers that only
+  /// ever incremented in-memory and reset on every login.
+  Future<EarningsSummary> fetchEarningsSummary() async {
+    try {
+      final rows = await supabase.rpc('get_my_earnings_summary') as List<dynamic>;
+      if (rows.isEmpty) return const EarningsSummary();
+      return EarningsSummary.fromJson(rows.first as Map<String, dynamic>);
+    } catch (_) {
+      return const EarningsSummary();
+    }
+  }
+
+  /// Zero-filled daily earnings for the last [days] days — feeds the
+  /// earnings chart's daily/weekly/monthly views from one real series
+  /// instead of three separate fabricated data sets.
+  Future<List<DailyEarningsPoint>> fetchDailyEarnings({int days = 180}) async {
+    try {
+      final rows = await supabase.rpc('get_my_daily_earnings', params: {'p_days': days}) as List<dynamic>;
+      return rows.map((row) => DailyEarningsPoint.fromJson(row as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Full delivered-order history for the signed-in rider, most recent
+  /// first — real rows from orders, not a mock list mixed with whatever
+  /// happened to be completed in the current session.
+  Future<List<Map<String, dynamic>>> fetchOrderHistory(String riderId, {int limit = 100}) async {
+    final rows = await supabase
+        .from('orders')
+        .select(_orderSelect)
+        .eq('rider_id', riderId)
+        .eq('status', 'delivered')
+        .order('delivered_at', ascending: false)
+        .limit(limit);
+    return (rows as List).cast<Map<String, dynamic>>();
+  }
+
+  /// Payout batches for the signed-in rider (e.g. a weekly settlement) —
+  /// read-only from the rider app; created/marked paid by the restaurant
+  /// admin.
+  Future<List<RiderPayout>> fetchPayouts(String riderId) async {
+    try {
+      final rows = await supabase
+          .from('rider_payouts')
+          .select()
+          .eq('rider_id', riderId)
+          .order('created_at', ascending: false);
+      return (rows as List).map((row) => RiderPayout.fromJson(row as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<AvailableOrderSummary>> fetchAvailableOrders({double pricePerKm = 10.0}) async {
     try {
       return await _mapAvailableRows(await _queryAvailableOrders(_orderSelect), pricePerKm);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
+import '../data/mock_data.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_card.dart';
 import 'chat_screen.dart';
@@ -14,6 +15,14 @@ class OrderDetailsScreen extends StatelessWidget {
   final String distance;
   final String status;
   final bool isCompleted;
+  // Set when viewing a past delivery from history — uses the real address/
+  // items captured for that specific order instead of falling back to
+  // whatever the rider's current active order happens to be (which made
+  // every historical order look identical and showed a fake hardcoded
+  // item list).
+  final bool isHistorical;
+  final String? restaurantAddress;
+  final List<OrderLineItem>? items;
 
   const OrderDetailsScreen({
     Key? key,
@@ -21,20 +30,19 @@ class OrderDetailsScreen extends StatelessWidget {
     required this.restaurantName,
     required this.dropoffAddress,
     required this.payout,
-    required this.tip,
+    this.tip = 0,
     required this.distance,
     this.status = 'COMPLETED',
     this.isCompleted = true,
+    this.isHistorical = false,
+    this.restaurantAddress,
+    this.items,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final active = AppState.instance.hasActiveOrder ? AppState.instance.activeOrder : null;
-    final orderItems = [
-      {'name': 'Chicken Dum Biryani (Large)', 'qty': '2×', 'options': 'NO ONIONS • EXTRA SPICY'},
-      {'name': 'Butter Naan', 'qty': '1×', 'options': 'Garlic butter glazed'},
-      {'name': 'Mango Lassi', 'qty': '1×', 'options': 'Chilled, with cardamom flavor'},
-    ];
+    final active = !isHistorical && AppState.instance.hasActiveOrder ? AppState.instance.activeOrder : null;
+    final orderItems = items ?? const <OrderLineItem>[];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -112,17 +120,19 @@ class OrderDetailsScreen extends StatelessWidget {
                   Text(restaurantName, style: const TextStyle(color: AppColors.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 4),
                   Text(
-                    active?.restaurantAddress ?? 'Restaurant address',
+                    restaurantAddress ?? active?.restaurantAddress ?? 'Restaurant address',
                     style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
                   ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(child: _actionBtn(Icons.phone_rounded, 'Call Restaurant', context, phone: active?.restaurantPhone ?? '')),
-                      const SizedBox(width: 12),
-                      Expanded(child: _actionBtn(Icons.navigation_rounded, 'Navigate', context)),
-                    ],
-                  ),
+                  if (!isHistorical) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(child: _actionBtn(Icons.phone_rounded, 'Call Restaurant', context, phone: active?.restaurantPhone ?? '')),
+                        const SizedBox(width: 12),
+                        Expanded(child: _actionBtn(Icons.navigation_rounded, 'Navigate', context)),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -146,51 +156,60 @@ class OrderDetailsScreen extends StatelessWidget {
                       style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontStyle: FontStyle.italic),
                     ),
                   ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(child: _actionBtn(Icons.message_rounded, 'Message', context, chatName: active?.customerName ?? 'Customer')),
-                      const SizedBox(width: 12),
-                      Expanded(child: _actionBtn(Icons.phone_rounded, 'Call Customer', context, phone: active?.customerPhone ?? '')),
-                    ],
-                  ),
+                  if (!isHistorical) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(child: _actionBtn(Icons.message_rounded, 'Message', context, chatName: active?.customerName ?? 'Customer')),
+                        const SizedBox(width: 12),
+                        Expanded(child: _actionBtn(Icons.phone_rounded, 'Call Customer', context, phone: active?.customerPhone ?? '')),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
             const SizedBox(height: 20),
             const Text('ORDER ITEMS', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.5)),
             const SizedBox(height: 10),
-            ...orderItems.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: AppCard(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppColors.surfaceAccent,
-                            borderRadius: BorderRadius.circular(6),
+            if (orderItems.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('No item details available', style: TextStyle(color: AppColors.textMuted, fontSize: 12)),
+              )
+            else
+              ...orderItems.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: AppCard(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceAccent,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              item.qty,
+                              style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700),
+                            ),
                           ),
-                          child: Text(
-                            item['qty']!,
-                            style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w700),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(item.name, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                if (item.subtitle.isNotEmpty)
+                                  Text(item.subtitle, style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(item['name']!, style: const TextStyle(color: AppColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
-                              Text(item['options']!, style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                            ],
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                )),
+                  )),
             const SizedBox(height: 16),
             if (!isCompleted)
               ElevatedButton(

@@ -278,20 +278,6 @@ class MockData {
     'avgDeliveryMin': 14,
   };
 
-  static List<TripData> allTrips = [
-    TripData(id: '#ORD-99201', restaurant: 'Artisan Pizza Co. • Downtown', time: 'Today • 14:22', payout: 18.45, tip: 4.00, distance: '4.2 km', duration: '12 min'),
-    TripData(id: '#ORD-99155', restaurant: 'Spice Route Kitchen', time: 'Today • 12:45', payout: 14.50, tip: 3.00, distance: '3.8 km', duration: '11 min'),
-    TripData(id: '#ORD-99102', restaurant: 'Baba Biryani - Downtown', time: 'Today • 11:20', payout: 22.80, tip: 5.00, distance: '8.1 km', duration: '18 min'),
-    TripData(id: '#ORD-99088', restaurant: 'The Burger Collective', time: 'Today • 10:05', payout: 12.50, tip: 2.50, distance: '2.9 km', duration: '9 min'),
-    TripData(id: '#ORD-99041', restaurant: 'Tokyo Ramen House', time: 'Yesterday • 19:30', payout: 16.20, tip: 0.00, distance: '5.1 km', duration: '15 min'),
-    TripData(id: '#ORD-99012', restaurant: 'Green Bowl Salads', time: 'Yesterday • 18:15', payout: 9.80, tip: 1.50, distance: '2.2 km', duration: '8 min'),
-    TripData(id: '#ORD-98977', restaurant: 'Artisan Pizza Co. • Downtown', time: 'Yesterday • 17:42', payout: 11.20, tip: 2.00, distance: '3.5 km', duration: '10 min'),
-    TripData(id: '#ORD-98931', restaurant: 'Gourmet Burger Kitchen', time: 'Yesterday • 16:10', payout: 8.50, tip: 2.00, distance: '3.8 km', duration: '14 min'),
-    TripData(id: '#ORD-98888', restaurant: 'Sushi Garden', time: 'Yesterday • 15:22', payout: 6.20, tip: 0.00, distance: '1.7 km', duration: '8 min'),
-    TripData(id: '#ORD-98842', restaurant: 'Mediterranean Grill', time: 'Jun 11 • 20:10', payout: 13.40, tip: 3.50, distance: '4.0 km', duration: '13 min'),
-    TripData(id: '#ORD-98790', restaurant: 'Curry Leaf Express', time: 'Jun 11 • 18:55', payout: 19.60, tip: 6.00, distance: '6.8 km', duration: '20 min'),
-    TripData(id: '#ORD-98721', restaurant: 'Morning Brew Café', time: 'Jun 11 • 09:15', payout: 7.30, tip: 1.00, distance: '1.4 km', duration: '7 min'),
-  ];
 
   static const supportTopics = [
     SupportTopic(
