@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_client.dart';
 import 'data/mock_data.dart';
@@ -42,6 +43,8 @@ class AppState extends ChangeNotifier {
 
   final OrderService _orders = OrderService();
   RealtimeChannel? _ordersChannel;
+  RealtimeChannel? _notificationsChannel;
+  List<NotificationItem> _notifications = [];
 
   bool _isLoggedIn = false;
   bool _isOnline = false;
@@ -73,10 +76,13 @@ class AppState extends ChangeNotifier {
   double? _distanceToCustomerKm;
   String? _locationError;
   double _pricePerKm = 10.0;
+  double _lastPayout = 0.0;
 
   List<Map<String, String>> _checklistItems = [];
   List<bool> _verifiedItems = [];
   bool _hasPhotoProof = false;
+  String? _deliveryProofUrl;
+  bool _isUploadingPhoto = false;
   String _recipientName = '';
   final List<TripData> _tripsHistory = List.from(MockData.allTrips);
 
@@ -116,9 +122,12 @@ class AppState extends ChangeNotifier {
   double? get distanceToCustomerKm => _distanceToCustomerKm;
   String? get locationError => _locationError;
   double get pricePerKm => _pricePerKm;
+  double get lastPayout => _lastPayout;
   List<bool> get verifiedItems => _verifiedItems;
   List<Map<String, String>> get checklistItems => _checklistItems;
   bool get hasPhotoProof => _hasPhotoProof;
+  String? get deliveryProofUrl => _deliveryProofUrl;
+  bool get isUploadingPhoto => _isUploadingPhoto;
   String get recipientName => _recipientName;
   List<TripData> get tripsHistory => _tripsHistory;
   List<AvailableOrderSummary> get availableOrders => _availableOrders;
@@ -126,12 +135,16 @@ class AppState extends ChangeNotifier {
   List<AvailableOrderSummary> get pendingAlertOrders => _pendingAlertOrders;
   bool get hasActiveOrder => _activeOrder != null;
 
-  int get unreadNotifications => MockData.notifications.where((n) => !n.isRead).length;
+  List<NotificationItem> get notifications => _notifications;
+  int get unreadNotifications => _notifications.where((n) => !n.isRead).length;
 
   ActiveOrderData get activeOrder => _activeOrder ?? MockData.activeOrder;
   RiderProfile get rider => _rider;
-  bool get isAllItemsVerified =>
-      _verifiedItems.isNotEmpty && _verifiedItems.every((item) => item);
+  // An order with zero items (e.g. missing order_items rows) has nothing to
+  // check off — every([]) is vacuously true, which is correct here. The old
+  // isNotEmpty guard meant a zero-item order could never pass verification,
+  // permanently blocking "Start Delivery".
+  bool get isAllItemsVerified => _verifiedItems.every((item) => item);
 
   bool isClaimingOrder(String orderId) => _isClaiming && _claimingOrderId == orderId;
 
@@ -146,6 +159,8 @@ class AppState extends ChangeNotifier {
       _errorMessage = profileError;
     }
     await _fetchPricePerKm();
+    await _loadNotifications();
+    _subscribeToNotifications();
     await _syncActiveOrder();
     if (!hasActiveOrder) {
       await goOnline();
@@ -182,6 +197,8 @@ class AppState extends ChangeNotifier {
       if (profileError != null) return profileError;
 
       await _fetchPricePerKm();
+      await _loadNotifications();
+      _subscribeToNotifications();
       await _syncActiveOrder();
       if (!hasActiveOrder) {
         await goOnline();
@@ -201,6 +218,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     await _teardownRealtime();
+    await _notificationsChannel?.unsubscribe();
+    _notificationsChannel = null;
     await _stopPresenceTracking(markOffline: true);
     await supabase.auth.signOut();
 
@@ -211,6 +230,7 @@ class AppState extends ChangeNotifier {
     _availableOrders = [];
     _activeOrder = null;
     _rider = MockData.rider;
+    _notifications = [];
     notifyListeners();
   }
 
@@ -229,6 +249,7 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
 
+    await _fetchPricePerKm();
     await _refreshAvailableOrders();
     _subscribeToOrders();
     await _startPresenceTracking();
@@ -339,13 +360,38 @@ class AppState extends ChangeNotifier {
   void arrivedAtCustomer() {
     _orderState = OrderState.confirmDelivery;
     _hasPhotoProof = false;
+    _deliveryProofUrl = null;
     _recipientName = _activeOrder?.customerName ?? '';
     notifyListeners();
   }
 
-  void uploadPhotoProof() {
-    _hasPhotoProof = true;
+  /// Opens the camera or gallery, uploads the photo to Supabase Storage,
+  /// and links it to the active order. Returns an error message on
+  /// failure, or null on success.
+  Future<String?> uploadPhotoProof(ImageSource source) async {
+    final order = _activeOrder;
+    if (order == null) return 'No active order';
+
+    _isUploadingPhoto = true;
     notifyListeners();
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 70, maxWidth: 1280);
+      if (picked == null) return null;
+
+      final bytes = await picked.readAsBytes();
+      final url = await _orders.uploadDeliveryProof(order.rawId, bytes);
+
+      _deliveryProofUrl = url;
+      _hasPhotoProof = true;
+      return null;
+    } catch (e) {
+      return 'Could not upload photo. Please try again.';
+    } finally {
+      _isUploadingPhoto = false;
+      notifyListeners();
+    }
   }
 
   void setRecipientName(String name) {
@@ -358,12 +404,16 @@ class AppState extends ChangeNotifier {
     if (order == null) return 'No active order';
 
     try {
-      await _orders.markDelivered(order.rawId);
+      final actualPayment = await _orders.markDelivered(order.rawId);
       _distanceToRestaurantKm = null;
       _distanceToCustomerKm = null;
       _orderState = OrderState.completed;
 
-      final payout = order.guaranteedEarnings;
+      // Prefer the authoritative server-computed figure; the order's own
+      // estimate is only a fallback if it genuinely couldn't be computed
+      // (e.g. missing coordinates).
+      final payout = actualPayment ?? order.guaranteedEarnings;
+      _lastPayout = payout;
       _weeklyEarnings += payout;
       _todayEarnings += payout;
       _deliveriesCount += 1;
@@ -421,8 +471,48 @@ class AppState extends ChangeNotifier {
       totalEarnings: _weeklyEarnings,
       activeHours: '—',
       deviceId: '—',
+      avatarUrl: profile['avatar_url'] as String?,
     );
     return null;
+  }
+
+  /// Opens the camera or gallery, uploads the photo to Supabase Storage,
+  /// and updates the rider's profile immediately (and persists past
+  /// refresh, since it's read back from profiles.avatar_url on next load).
+  Future<String?> uploadProfilePhoto(ImageSource source) async {
+    final riderId = _riderId;
+    if (riderId == null) return 'Not signed in';
+
+    _isUploadingPhoto = true;
+    notifyListeners();
+
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 70, maxWidth: 800);
+      if (picked == null) return null;
+
+      final bytes = await picked.readAsBytes();
+      final url = await _orders.uploadRiderProfilePhoto(riderId, bytes);
+
+      _rider = RiderProfile(
+        id: _rider.id,
+        displayName: _rider.displayName,
+        fleetId: _rider.fleetId,
+        memberSince: _rider.memberSince,
+        rating: _rider.rating,
+        completedTasks: _rider.completedTasks,
+        totalEarnings: _rider.totalEarnings,
+        activeHours: _rider.activeHours,
+        deviceId: _rider.deviceId,
+        avatarUrl: url,
+      );
+      return null;
+    } catch (e) {
+      return 'Could not upload photo. Please try again.';
+    } finally {
+      _isUploadingPhoto = false;
+      notifyListeners();
+    }
   }
 
   Future<void> _syncActiveOrder() async {
@@ -458,7 +548,7 @@ class AppState extends ChangeNotifier {
       _activeOrder = null;
       return;
     }
-    _activeOrder = await _orders.fetchActiveOrder(_riderId!);
+    _activeOrder = await _orders.fetchActiveOrder(_riderId!, pricePerKm: _pricePerKm);
   }
 
   void _setupChecklistFromActiveOrder() {
@@ -485,7 +575,7 @@ class AppState extends ChangeNotifier {
     }
 
     try {
-      final fetched = await _orders.fetchAvailableOrders();
+      final fetched = await _orders.fetchAvailableOrders(pricePerKm: _pricePerKm);
 
       if (_hasInitialOrdersSnapshot) {
         final newOnes = fetched.where((o) => !_knownOrderIds.contains(o.id)).toList();
@@ -538,6 +628,73 @@ class AppState extends ChangeNotifier {
   Future<void> _teardownRealtime() async {
     await _ordersChannel?.unsubscribe();
     _ordersChannel = null;
+  }
+
+  Future<void> _loadNotifications() async {
+    final riderId = _riderId;
+    if (riderId == null) return;
+    try {
+      final rows = await _orders.fetchNotifications(riderId);
+      _notifications = rows.map((row) => NotificationItem.fromSupabase(row)).toList();
+    } catch (_) {
+      // Leave whatever was already loaded rather than wiping it on a
+      // transient fetch failure.
+    }
+  }
+
+  /// Live updates the badge/list the instant a new notification is
+  /// inserted (e.g. a new order is assigned), independent of whichever
+  /// screen is currently open.
+  void _subscribeToNotifications() {
+    final riderId = _riderId;
+    if (riderId == null) return;
+
+    _notificationsChannel?.unsubscribe();
+    _notificationsChannel = supabase
+        .channel('rider-notifications-$riderId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'rider_notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'rider_id',
+            value: riderId,
+          ),
+          callback: (_) async {
+            await _loadNotifications();
+            notifyListeners();
+          },
+        )
+        .subscribe();
+  }
+
+  Future<void> markNotificationRead(String id) async {
+    final index = _notifications.indexWhere((n) => n.id == id);
+    if (index == -1 || _notifications[index].isRead) return;
+
+    _notifications[index].isRead = true;
+    notifyListeners();
+    try {
+      await _orders.markNotificationRead(id);
+    } catch (_) {
+      // The badge will self-correct on the next load/realtime event.
+    }
+  }
+
+  Future<void> markAllNotificationsRead() async {
+    final riderId = _riderId;
+    if (riderId == null) return;
+
+    for (final n in _notifications) {
+      n.isRead = true;
+    }
+    notifyListeners();
+    try {
+      await _orders.markAllNotificationsRead(riderId);
+    } catch (_) {
+      // Self-corrects on next load/realtime event.
+    }
   }
 
   Future<void> _fetchPricePerKm() async {

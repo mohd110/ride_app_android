@@ -86,7 +86,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              '\$${displayEarnings.toStringAsFixed(2)}',
+                              '₹${displayEarnings.toStringAsFixed(2)}',
                               style: const TextStyle(
                                 color: AppColors.primary,
                                 fontSize: 32,
@@ -224,7 +224,7 @@ class _DeliveryHistoryScreenState extends State<DeliveryHistoryScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  '\$${trip.payout.toStringAsFixed(2)}',
+                  '₹${trip.payout.toStringAsFixed(2)}',
                   style: const TextStyle(color: AppColors.primary, fontSize: 13, fontWeight: FontWeight.w700),
                 ),
               ),

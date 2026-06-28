@@ -1,12 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as ll;
 import '../theme/app_colors.dart';
 
-class DeliveryRouteMap extends StatefulWidget {
+/// Renders pickup/drop-off/rider pins on OpenStreetMap tiles — no API key,
+/// billing, or Google Cloud Console setup required at all. Real turn-by-turn
+/// navigation is handled separately by launching the actual Google Maps app
+/// (see ActiveOrderFlow._launchNavigation), so this widget only needs to show
+/// an overview, not drive real routing — a perfect fit for a free tile layer.
+class DeliveryRouteMap extends StatelessWidget {
   final double? restaurantLat;
   final double? restaurantLng;
   final double? customerLat;
   final double? customerLng;
+  final double? riderLat;
+  final double? riderLng;
 
   const DeliveryRouteMap({
     Key? key,
@@ -14,30 +22,25 @@ class DeliveryRouteMap extends StatefulWidget {
     required this.restaurantLng,
     required this.customerLat,
     required this.customerLng,
+    this.riderLat,
+    this.riderLng,
   }) : super(key: key);
 
-  @override
-  State<DeliveryRouteMap> createState() => _DeliveryRouteMapState();
-}
+  static const _fallbackCenter = ll.LatLng(26.4499, 80.3319);
 
-class _DeliveryRouteMapState extends State<DeliveryRouteMap> {
-  GoogleMapController? _controller;
+  ll.LatLng? get _restaurantPos =>
+      restaurantLat != null && restaurantLng != null ? ll.LatLng(restaurantLat!, restaurantLng!) : null;
 
-  // Matches the fallback center used by the customer-facing web app's LiveMap.
-  static const _fallbackCenter = LatLng(26.4499, 80.3319);
+  ll.LatLng? get _customerPos =>
+      customerLat != null && customerLng != null ? ll.LatLng(customerLat!, customerLng!) : null;
 
-  LatLng? get _restaurantPos => widget.restaurantLat != null && widget.restaurantLng != null
-      ? LatLng(widget.restaurantLat!, widget.restaurantLng!)
-      : null;
-
-  LatLng? get _customerPos => widget.customerLat != null && widget.customerLng != null
-      ? LatLng(widget.customerLat!, widget.customerLng!)
-      : null;
+  ll.LatLng? get _riderPos => riderLat != null && riderLng != null ? ll.LatLng(riderLat!, riderLng!) : null;
 
   @override
   Widget build(BuildContext context) {
     final restaurantPos = _restaurantPos;
     final customerPos = _customerPos;
+    final riderPos = _riderPos;
 
     if (restaurantPos == null && customerPos == null) {
       return Container(
@@ -52,68 +55,78 @@ class _DeliveryRouteMapState extends State<DeliveryRouteMap> {
       );
     }
 
-    final markers = <Marker>{
-      if (restaurantPos != null)
-        Marker(
-          markerId: const MarkerId('restaurant'),
-          position: restaurantPos,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          infoWindow: const InfoWindow(title: 'Pickup'),
-        ),
-      if (customerPos != null)
-        Marker(
-          markerId: const MarkerId('customer'),
-          position: customerPos,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-          infoWindow: const InfoWindow(title: 'Drop-off'),
-        ),
-    };
+    final points = <ll.LatLng>[
+      if (restaurantPos != null) restaurantPos,
+      if (customerPos != null) customerPos,
+      if (riderPos != null) riderPos,
+    ];
+    final bounds = points.length > 1 ? LatLngBounds.fromPoints(points) : null;
 
-    final polylines = <Polyline>{
-      if (restaurantPos != null && customerPos != null)
-        Polyline(
-          polylineId: const PolylineId('route'),
-          points: [restaurantPos, customerPos],
-          color: AppColors.primary,
-          width: 3,
-          patterns: [PatternItem.dash(20), PatternItem.gap(10)],
-        ),
-    };
-
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(
-        target: restaurantPos ?? customerPos ?? _fallbackCenter,
-        zoom: 14,
+    return FlutterMap(
+      options: MapOptions(
+        initialCenter: restaurantPos ?? customerPos ?? _fallbackCenter,
+        initialZoom: 14,
+        initialCameraFit: bounds != null
+            ? CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60))
+            : null,
       ),
-      markers: markers,
-      polylines: polylines,
-      myLocationEnabled: true,
-      myLocationButtonEnabled: true,
-      zoomControlsEnabled: false,
-      onMapCreated: (controller) {
-        _controller = controller;
-        if (restaurantPos != null && customerPos != null) {
-          _fitBounds(restaurantPos, customerPos);
-        }
-      },
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.riderapp',
+        ),
+        if (restaurantPos != null && customerPos != null)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: [restaurantPos, customerPos],
+                color: AppColors.primary,
+                strokeWidth: 3,
+                pattern: StrokePattern.dashed(segments: const [12, 8]),
+              ),
+            ],
+          ),
+        MarkerLayer(
+          markers: [
+            if (restaurantPos != null)
+              Marker(
+                point: restaurantPos,
+                width: 36,
+                height: 36,
+                child: _pin(Icons.storefront_rounded, Colors.red),
+              ),
+            if (customerPos != null)
+              Marker(
+                point: customerPos,
+                width: 36,
+                height: 36,
+                child: _pin(Icons.home_rounded, Colors.blue),
+              ),
+            if (riderPos != null)
+              Marker(
+                point: riderPos,
+                width: 36,
+                height: 36,
+                child: _pin(Icons.two_wheeler_rounded, Colors.green),
+              ),
+          ],
+        ),
+        const SimpleAttributionWidget(
+          source: Text('OpenStreetMap'),
+        ),
+      ],
     );
   }
 
-  Future<void> _fitBounds(LatLng a, LatLng b) async {
-    await Future.delayed(const Duration(milliseconds: 200));
-    final controller = _controller;
-    if (controller == null) return;
-
-    final bounds = LatLngBounds(
-      southwest: LatLng(
-        a.latitude < b.latitude ? a.latitude : b.latitude,
-        a.longitude < b.longitude ? a.longitude : b.longitude,
+  Widget _pin(IconData icon, Color color) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 2),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 4)],
       ),
-      northeast: LatLng(
-        a.latitude > b.latitude ? a.latitude : b.latitude,
-        a.longitude > b.longitude ? a.longitude : b.longitude,
-      ),
+      child: Icon(icon, color: color, size: 20),
     );
-    await controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 60));
   }
 }

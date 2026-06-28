@@ -337,7 +337,7 @@ class DashboardTab extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '₹${order.deliveryFee.toStringAsFixed(2)}',
+                '₹${order.estimatedEarnings.toStringAsFixed(2)}',
                 style: const TextStyle(
                   color: AppColors.primary,
                   fontSize: 18,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import '../app_state.dart';
 
 class RiderProfile {
@@ -11,6 +12,7 @@ class RiderProfile {
   final double totalEarnings;
   final String activeHours;
   final String deviceId;
+  final String? avatarUrl;
 
   const RiderProfile({
     required this.id,
@@ -22,6 +24,7 @@ class RiderProfile {
     required this.totalEarnings,
     required this.activeHours,
     required this.deviceId,
+    this.avatarUrl,
   });
 }
 
@@ -41,6 +44,32 @@ class NotificationItem {
     required this.type,
     this.isRead = false,
   });
+
+  factory NotificationItem.fromSupabase(Map<String, dynamic> json) {
+    final createdAt = DateTime.tryParse(json['created_at'] as String? ?? '');
+    return NotificationItem(
+      id: json['id'] as String,
+      title: json['title'] as String? ?? '',
+      body: json['body'] as String? ?? '',
+      time: createdAt != null ? _relativeTime(createdAt) : '',
+      type: json['type'] as String? ?? 'order_assigned',
+      isRead: json['is_read'] as bool? ?? false,
+    );
+  }
+}
+
+String _relativeTime(DateTime time) {
+  // .toUtc() on each side independently before diffing — correct regardless
+  // of whether `time` parsed as UTC or local, and of device timezone.
+  var diff = DateTime.now().toUtc().difference(time.toUtc());
+  if (diff.isNegative) diff = Duration.zero; // guard against clock skew
+
+  if (diff.inSeconds < 60) return 'Just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min${diff.inMinutes == 1 ? '' : 's'} ago';
+  if (diff.inHours < 24) return '${diff.inHours} hr${diff.inHours == 1 ? '' : 's'} ago';
+  if (diff.inDays == 1) return 'Yesterday';
+  if (diff.inDays < 7) return '${diff.inDays} days ago';
+  return '${time.day}/${time.month}/${time.year}';
 }
 
 class ActiveOrderData {
@@ -88,11 +117,31 @@ class ActiveOrderData {
     required this.items,
   });
 
-  factory ActiveOrderData.fromSupabase(Map<String, dynamic> json) {
+  factory ActiveOrderData.fromSupabase(Map<String, dynamic> json, {double pricePerKm = 10.0}) {
     final restaurant = json['restaurants'] as Map<String, dynamic>?;
     final delivery = json['delivery_address'] as Map<String, dynamic>? ?? {};
     final rawId = json['id'] as String;
     final deliveryFee = (json['delivery_fee'] as num?)?.toInt() ?? 0;
+    final restaurantLat = (restaurant?['latitude'] as num?)?.toDouble();
+    final restaurantLng = (restaurant?['longitude'] as num?)?.toDouble();
+    final customerLat = (json['delivery_latitude'] as num?)?.toDouble();
+    final customerLng = (json['delivery_longitude'] as num?)?.toDouble();
+
+    // Rider pay is restaurant-to-customer distance × the current rate —
+    // never the customer's delivery_fee, which is an unrelated number.
+    // This is an estimate shown before delivery; the authoritative figure
+    // is computed server-side (orders.rider_payment) once marked delivered.
+    final storedPayment = (json['rider_payment'] as num?)?.toDouble();
+    double estimatedEarnings;
+    if (storedPayment != null) {
+      estimatedEarnings = storedPayment;
+    } else if (restaurantLat != null && restaurantLng != null && customerLat != null && customerLng != null) {
+      final distanceKm = Geolocator.distanceBetween(restaurantLat, restaurantLng, customerLat, customerLng) / 1000.0;
+      estimatedEarnings = distanceKm * pricePerKm;
+    } else {
+      // delivery_fee is plain rupees, not paise — no /100 conversion.
+      estimatedEarnings = deliveryFee.toDouble();
+    }
     final items = (json['order_items'] as List<dynamic>? ?? [])
         .map((item) {
           final row = item as Map<String, dynamic>;
@@ -115,16 +164,16 @@ class ActiveOrderData {
       restaurant: restaurant?['name'] as String? ?? 'Restaurant',
       restaurantAddress: restaurant?['address'] as String? ?? '',
       restaurantPhone: restaurant?['phone'] as String? ?? '',
-      restaurantLat: (restaurant?['latitude'] as num?)?.toDouble(),
-      restaurantLng: (restaurant?['longitude'] as num?)?.toDouble(),
+      restaurantLat: restaurantLat,
+      restaurantLng: restaurantLng,
       customerName: delivery['name'] as String? ?? 'Customer',
       customerAddress: delivery['address'] as String? ?? '',
       customerPhone: delivery['phone'] as String? ?? '',
-      customerLat: (json['delivery_latitude'] as num?)?.toDouble(),
-      customerLng: (json['delivery_longitude'] as num?)?.toDouble(),
+      customerLat: customerLat,
+      customerLng: customerLng,
       pickupInstruction: 'Collect the order at the counter and verify the bag is sealed.',
       deliveryNote: note,
-      guaranteedEarnings: deliveryFee / 100.0,
+      guaranteedEarnings: estimatedEarnings,
       peakPay: 0,
       distance: '—',
       eta: '—',
@@ -228,70 +277,6 @@ class MockData {
     'acceptanceRate': '94%',
     'avgDeliveryMin': 14,
   };
-
-  static List<NotificationItem> notifications = [
-    NotificationItem(
-      id: 'n1',
-      title: 'New peak hour bonus',
-      body: 'Earn +\$2.50 per delivery between 4pm–6pm today in Downtown zone.',
-      time: '12 min ago',
-      type: 'bonus',
-    ),
-    NotificationItem(
-      id: 'n2',
-      title: 'Payout processed',
-      body: '\$312.40 was deposited to account ending in 4921.',
-      time: '2 hrs ago',
-      type: 'payment',
-      isRead: true,
-    ),
-    NotificationItem(
-      id: 'n3',
-      title: 'Shift reminder',
-      body: 'Your scheduled shift starts at 5:00 PM. Go online 10 min early.',
-      time: '3 hrs ago',
-      type: 'shift',
-    ),
-    NotificationItem(
-      id: 'n4',
-      title: 'High demand nearby',
-      body: '12 restaurants in Sector 4 need riders. Surge active until 8 PM.',
-      time: '5 hrs ago',
-      type: 'demand',
-    ),
-    NotificationItem(
-      id: 'n5',
-      title: 'Vehicle service due',
-      body: 'Your eBike is due for maintenance in 8 days. Book a slot in Profile.',
-      time: 'Yesterday',
-      type: 'vehicle',
-      isRead: true,
-    ),
-    NotificationItem(
-      id: 'n6',
-      title: 'Customer rated you 5★',
-      body: 'Alex Johnson left a 5-star rating for order #ORD-99155.',
-      time: 'Yesterday',
-      type: 'rating',
-      isRead: true,
-    ),
-    NotificationItem(
-      id: 'n7',
-      title: 'Policy update',
-      body: 'Updated delivery proof guidelines effective Jun 15. Tap to read.',
-      time: '2 days ago',
-      type: 'policy',
-      isRead: true,
-    ),
-    NotificationItem(
-      id: 'n8',
-      title: 'Weekly summary ready',
-      body: 'You completed 142 deliveries and earned \$1,248.50 this week.',
-      time: '3 days ago',
-      type: 'summary',
-      isRead: true,
-    ),
-  ];
 
   static List<TripData> allTrips = [
     TripData(id: '#ORD-99201', restaurant: 'Artisan Pizza Co. • Downtown', time: 'Today • 14:22', payout: 18.45, tip: 4.00, distance: '4.2 km', duration: '12 min'),

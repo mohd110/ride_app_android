@@ -15,7 +15,7 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rider = AppState.instance.rider;
-    final unread = MockData.notifications.where((n) => !n.isRead).length;
+    final unread = AppState.instance.unreadNotifications;
 
     return Drawer(
       backgroundColor: AppColors.surface,
@@ -31,7 +31,9 @@ class AppDrawer extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 32,
-                    backgroundImage: const AssetImage('assets/images/rider_profile.png'),
+                    backgroundImage: rider.avatarUrl != null
+                        ? NetworkImage(rider.avatarUrl!)
+                        : const AssetImage('assets/images/rider_profile.png') as ImageProvider,
                   ),
                   const SizedBox(height: 12),
                   Text(rider.displayName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),

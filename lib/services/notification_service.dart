@@ -60,7 +60,7 @@ class NotificationService {
     final first = orders.first;
     final title = orders.length == 1 ? 'New order available' : '${orders.length} new orders available';
     final body = orders.length == 1
-        ? '${first.restaurantName} → ${first.dropoffAddress} • ₹${first.deliveryFee.toStringAsFixed(2)}'
+        ? '${first.restaurantName} → ${first.dropoffAddress} • ₹${first.estimatedEarnings.toStringAsFixed(2)} est. earnings'
         : 'Tap to view available deliveries';
 
     // Start (or restart) the looping alert ring.

@@ -59,7 +59,7 @@ class _EarningsTabState extends State<EarningsTab> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '\$${state.todayEarnings.toStringAsFixed(2)}',
+                          '₹${state.todayEarnings.toStringAsFixed(2)}',
                           style: const TextStyle(
                             color: AppColors.primary,
                             fontSize: 32,
@@ -131,17 +131,17 @@ class _EarningsTabState extends State<EarningsTab> {
                       MaterialPageRoute(
                         builder: (_) => IncomeDetailScreen(
                           title: 'Delivery Fees',
-                          amount: '\$${state.deliveryFees.toStringAsFixed(2)}',
+                          amount: '₹${state.deliveryFees.toStringAsFixed(2)}',
                           description: 'Base pay for ${state.deliveriesCount} completed trips',
                           lineItems: [
-                            {'label': 'Short trips (< 3 km)', 'value': '\$42.00'},
-                            {'label': 'Medium trips (3–6 km)', 'value': '\$38.00'},
-                            {'label': 'Long trips (> 6 km)', 'value': '\$18.00'},
+                            {'label': 'Short trips (< 3 km)', 'value': '₹42.00'},
+                            {'label': 'Medium trips (3–6 km)', 'value': '₹38.00'},
+                            {'label': 'Long trips (> 6 km)', 'value': '₹18.00'},
                           ],
                         ),
                       ),
                     ),
-                    child: _buildBreakdownItem(Icons.payments_rounded, 'Delivery Fees', 'Base pay for ${state.deliveriesCount} trips', '\$${state.deliveryFees.toStringAsFixed(2)}'),
+                    child: _buildBreakdownItem(Icons.payments_rounded, 'Delivery Fees', 'Base pay for ${state.deliveriesCount} trips', '₹${state.deliveryFees.toStringAsFixed(2)}'),
                   ),
                   const SizedBox(height: 8),
                   InkWell(
@@ -150,16 +150,16 @@ class _EarningsTabState extends State<EarningsTab> {
                       MaterialPageRoute(
                         builder: (_) => IncomeDetailScreen(
                           title: 'Tips',
-                          amount: '\$${state.tips.toStringAsFixed(2)}',
+                          amount: '₹${state.tips.toStringAsFixed(2)}',
                           description: 'Customer appreciation from ${state.deliveriesCount} deliveries',
                           lineItems: [
-                            {'label': 'Cash tips', 'value': '\$12.50'},
-                            {'label': 'In-app tips', 'value': '\$22.00'},
+                            {'label': 'Cash tips', 'value': '₹12.50'},
+                            {'label': 'In-app tips', 'value': '₹22.00'},
                           ],
                         ),
                       ),
                     ),
-                    child: _buildBreakdownItem(Icons.volunteer_activism_rounded, 'Tips', 'Customer appreciation', '\$${state.tips.toStringAsFixed(2)}', valueColor: AppColors.success),
+                    child: _buildBreakdownItem(Icons.volunteer_activism_rounded, 'Tips', 'Customer appreciation', '₹${state.tips.toStringAsFixed(2)}', valueColor: AppColors.success),
                   ),
                   const SizedBox(height: 8),
                   InkWell(
@@ -168,11 +168,11 @@ class _EarningsTabState extends State<EarningsTab> {
                       MaterialPageRoute(
                         builder: (_) => IncomeDetailScreen(
                           title: 'Incentives',
-                          amount: '\$${state.incentives.toStringAsFixed(2)}',
+                          amount: '₹${state.incentives.toStringAsFixed(2)}',
                           description: 'Peak hour and zone bonuses',
                           lineItems: [
-                            {'label': 'Peak Hour Bonus (4–6 PM)', 'value': '\$7.00'},
-                            {'label': 'Downtown surge', 'value': '\$3.00'},
+                            {'label': 'Peak Hour Bonus (4–6 PM)', 'value': '₹7.00'},
+                            {'label': 'Downtown surge', 'value': '₹3.00'},
                           ],
                         ),
                       ),
@@ -350,7 +350,7 @@ class _EarningsTabState extends State<EarningsTab> {
             ),
           ),
           Text(
-            '\$${amount.toStringAsFixed(2)}',
+            '₹${amount.toStringAsFixed(2)}',
             style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700),
           ),
         ],
@@ -402,11 +402,11 @@ class _EarningsTabState extends State<EarningsTab> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  '\$${trip.payout.toStringAsFixed(2)}',
+                  '₹${trip.payout.toStringAsFixed(2)}',
                   style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  trip.tip > 0 ? '+\$${trip.tip.toStringAsFixed(2)} Tip' : 'No Tip',
+                  trip.tip > 0 ? '+₹${trip.tip.toStringAsFixed(2)} Tip' : 'No Tip',
                   style: TextStyle(
                     color: trip.tip > 0 ? AppColors.success : AppColors.textMuted,
                     fontSize: 10,

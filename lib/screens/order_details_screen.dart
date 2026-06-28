@@ -83,7 +83,7 @@ class OrderDetailsScreen extends StatelessWidget {
                     children: [
                       const Text('EST. EARNINGS', style: TextStyle(color: AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w700)),
                       Text(
-                        '\$${payout.toStringAsFixed(2)}',
+                        '₹${payout.toStringAsFixed(2)}',
                         style: const TextStyle(color: AppColors.primary, fontSize: 28, fontWeight: FontWeight.w800),
                       ),
                     ],
@@ -94,7 +94,7 @@ class OrderDetailsScreen extends StatelessWidget {
                       Text('DISTANCE: $distance', style: const TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
                       if (tip > 0)
                         Text(
-                          'Includes \$${tip.toStringAsFixed(2)} Tip',
+                          'Includes ₹${tip.toStringAsFixed(2)} Tip',
                           style: const TextStyle(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w600),
                         ),
                     ],

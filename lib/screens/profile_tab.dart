@@ -4,6 +4,7 @@ import '../data/mock_data.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_card.dart';
+import '../widgets/photo_source_sheet.dart';
 import 'notifications_screen.dart';
 import 'vehicle_details_screen.dart';
 import 'payment_info_screen.dart';
@@ -35,7 +36,7 @@ class ProfileTab extends StatelessWidget {
                     onNotificationTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen())),
                   ),
                   const SizedBox(height: 12),
-                  _buildProfileHeader(rider),
+                  _buildProfileHeader(context, state, rider),
                   const SizedBox(height: 16),
                   Row(
                     children: [
@@ -51,7 +52,7 @@ class ProfileTab extends StatelessWidget {
                         child: InkWell(
                           onTap: () => state.setTab(1),
                           borderRadius: BorderRadius.circular(16),
-                          child: _buildStatCard("TODAY'S EARNINGS", '\$${state.todayEarnings.toStringAsFixed(2)}', Icons.trending_up_rounded),
+                          child: _buildStatCard("TODAY'S EARNINGS", '₹${state.todayEarnings.toStringAsFixed(2)}', Icons.trending_up_rounded),
                         ),
                       ),
                     ],
@@ -95,7 +96,7 @@ class ProfileTab extends StatelessWidget {
     );
   }
 
-  Widget _buildProfileHeader(RiderProfile rider) {
+  Widget _buildProfileHeader(BuildContext context, AppState state, RiderProfile rider) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(gradient: AppColors.profileGradient, borderRadius: BorderRadius.circular(20)),
@@ -109,17 +110,40 @@ class ProfileTab extends StatelessWidget {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 3),
-                  image: const DecorationImage(image: AssetImage('assets/images/rider_profile.png'), fit: BoxFit.cover),
+                  image: DecorationImage(
+                    image: rider.avatarUrl != null
+                        ? NetworkImage(rider.avatarUrl!)
+                        : const AssetImage('assets/images/rider_profile.png') as ImageProvider,
+                    fit: BoxFit.cover,
+                  ),
                 ),
+                child: state.isUploadingPhoto
+                    ? const CircleAvatar(
+                        backgroundColor: Colors.black38,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : null,
               ),
               Positioned(
                 bottom: 0,
                 right: 0,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                  child: const Icon(Icons.edit_rounded, color: AppColors.primary, size: 14),
+                child: GestureDetector(
+                  onTap: state.isUploadingPhoto
+                      ? null
+                      : () async {
+                          final source = await showPhotoSourceSheet(context);
+                          if (source == null) return;
+                          final error = await state.uploadProfilePhoto(source);
+                          if (error != null && context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+                          }
+                        },
+                  child: Container(
+                    width: 24,
+                    height: 24,
+                    decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                    child: const Icon(Icons.edit_rounded, color: AppColors.primary, size: 14),
+                  ),
                 ),
               ),
             ],

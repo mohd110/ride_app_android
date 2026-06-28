@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_card.dart';
 import '../widgets/delivery_route_map.dart';
+import '../widgets/photo_source_sheet.dart';
 import '../widgets/swipe_slider.dart';
 import 'active_order_detail_screen.dart';
 import 'chat_screen.dart';
@@ -74,6 +76,8 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
             restaurantLng: order.restaurantLng,
             customerLat: order.customerLat,
             customerLng: order.customerLng,
+            riderLat: state.riderLat,
+            riderLng: state.riderLng,
           ),
         ),
         Positioned(
@@ -136,22 +140,31 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
             ],
           ),
         ),
-        if (isToCustomer)
-          Positioned(
-            right: 20,
-            bottom: 200,
-            child: Column(
-              children: [
-                _fabBtn(Icons.chat_bubble_outline_rounded, onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => ChatScreen(contactName: order.customerName)),
+        Positioned(
+          right: 20,
+          bottom: 200,
+          child: Column(
+            children: [
+              _fabBtn(Icons.directions_rounded, onTap: () => _launchNavigation(
+                isToCustomer ? order.customerLat : order.restaurantLat,
+                isToCustomer ? order.customerLng : order.restaurantLng,
+              )),
+              const SizedBox(height: 10),
+              _fabBtn(Icons.chat_bubble_outline_rounded, onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => ChatScreen(
+                  contactName: isToCustomer ? order.customerName : order.restaurant,
                 )),
-                const SizedBox(height: 10),
-                _fabBtn(Icons.phone_rounded, onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => CallScreen(contactName: order.customerName, phone: order.customerPhone)),
+              )),
+              const SizedBox(height: 10),
+              _fabBtn(Icons.phone_rounded, onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => CallScreen(
+                  contactName: isToCustomer ? order.customerName : order.restaurant,
+                  phone: isToCustomer ? order.customerPhone : order.restaurantPhone,
                 )),
-              ],
-            ),
+              )),
+            ],
           ),
+        ),
         Positioned(
           bottom: 0,
           left: 0,
@@ -203,6 +216,41 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
         ),
       ],
     );
+  }
+
+  Future<void> _pickDeliveryProof(AppState state) async {
+    final source = await showPhotoSourceSheet(context);
+    if (source == null) return;
+
+    final error = await state.uploadPhotoProof(source);
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  /// Opens real turn-by-turn navigation in the Google Maps app (or
+  /// maps.google.com on web) rather than building a custom routing engine —
+  /// this gets live traffic-aware ETA and automatic rerouting on deviation
+  /// for free, maintained by Google instead of reimplemented here.
+  Future<void> _launchNavigation(double? lat, double? lng) async {
+    if (lat == null || lng == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No location saved for this stop yet.')),
+        );
+      }
+      return;
+    }
+
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
+    );
+    final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open Google Maps.')),
+      );
+    }
   }
 
   /// Straight-line distance/ETA to whichever leg the rider is currently on.
@@ -390,20 +438,30 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
                   ),
                   const SizedBox(height: 12),
                   GestureDetector(
-                    onTap: () => state.uploadPhotoProof(),
+                    onTap: state.isUploadingPhoto ? null : () => _pickDeliveryProof(state),
                     child: AppCard(
-                      child: state.hasPhotoProof
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.asset('assets/images/delivery_proof.png', height: 140, width: double.infinity, fit: BoxFit.cover),
+                      child: state.isUploadingPhoto
+                          ? const SizedBox(
+                              height: 140,
+                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                             )
-                          : Column(
-                              children: const [
-                                Icon(Icons.camera_alt_rounded, color: AppColors.textMuted, size: 32),
-                                SizedBox(height: 8),
-                                Text('Take Photo of Delivery', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-                              ],
-                            ),
+                          : state.hasPhotoProof && state.deliveryProofUrl != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(
+                                    state.deliveryProofUrl!,
+                                    height: 140,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Column(
+                                  children: const [
+                                    Icon(Icons.camera_alt_rounded, color: AppColors.textMuted, size: 32),
+                                    SizedBox(height: 8),
+                                    Text('Take Photo of Delivery', style: TextStyle(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                                  ],
+                                ),
                     ),
                   ),
                 ],
@@ -425,7 +483,7 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
   }
 
   Widget _buildSuccessScreen(AppState state) {
-    final payout = state.activeOrder.guaranteedEarnings;
+    final payout = state.lastPayout;
 
     return Padding(
       padding: const EdgeInsets.all(24),

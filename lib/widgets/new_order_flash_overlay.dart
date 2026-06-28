@@ -276,7 +276,7 @@ class _NewOrderFlashOverlayState extends State<NewOrderFlashOverlay>
                                   color: AppColors.primary, size: 20),
                               const SizedBox(width: 8),
                               Text(
-                                '₹${first.deliveryFee.toStringAsFixed(2)} delivery fee',
+                                '₹${first.estimatedEarnings.toStringAsFixed(2)} est. earnings',
                                 style: const TextStyle(
                                   color: AppColors.primary,
                                   fontSize: 17,
