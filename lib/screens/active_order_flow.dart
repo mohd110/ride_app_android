@@ -296,6 +296,10 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
   Widget _buildChecklistScreen(AppState state) {
     final checkedCount = state.verifiedItems.where((x) => x).length;
     final order = state.activeOrder;
+    final isReady = state.isOrderReady;
+    final allVerified = state.isAllItemsVerified;
+    // Both conditions must be true before the rider can start delivery.
+    final canStart = isReady && allVerified;
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -327,6 +331,32 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
             ),
             child: Text(order.pickupInstruction, style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
           ),
+          // Waiting banner — shown whenever the restaurant hasn't marked Ready yet.
+          // Disappears automatically (via realtime) once they tap Mark Ready.
+          if (!isReady) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF3CD),
+                border: Border.all(color: const Color(0xFFFFD700)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Icon(Icons.schedule_rounded, color: Color(0xFFB8860B), size: 20),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Waiting for the restaurant to mark this order as Ready for Pickup. Delivery will unlock automatically.',
+                      style: TextStyle(color: Color(0xFF7B6100), fontSize: 12, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -378,7 +408,7 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
           ),
           const SizedBox(height: 10),
           ElevatedButton(
-            onPressed: state.isAllItemsVerified
+            onPressed: canStart
                 ? () async {
                     final error = await state.startDelivery();
                     if (error != null && context.mounted) {
@@ -389,7 +419,13 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
             style: ElevatedButton.styleFrom(
               disabledBackgroundColor: AppColors.surfaceMuted,
             ),
-            child: Text(state.isAllItemsVerified ? 'START DELIVERY' : 'VERIFY ALL ITEMS'),
+            child: Text(
+              !allVerified
+                  ? 'VERIFY ALL ITEMS'
+                  : !isReady
+                      ? 'WAITING FOR RESTAURANT...'
+                      : 'START DELIVERY',
+            ),
           ),
         ],
       ),

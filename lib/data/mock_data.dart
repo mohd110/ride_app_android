@@ -159,7 +159,7 @@ class ActiveOrderData {
 
     return ActiveOrderData(
       rawId: rawId,
-      id: '#${rawId.substring(0, 8).toUpperCase()}',
+      id: json['order_number'] as String? ?? '#${rawId.substring(0, 8).toUpperCase()}',
       status: json['status'] as String? ?? 'accepted',
       restaurant: restaurant?['name'] as String? ?? 'Restaurant',
       restaurantAddress: restaurant?['address'] as String? ?? '',

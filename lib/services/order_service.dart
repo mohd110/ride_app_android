@@ -10,6 +10,7 @@ const _orderSelect =
 
 class AvailableOrderSummary {
   final String id;
+  final String orderNumber;
   final String restaurantName;
   final String restaurantAddress;
   final String dropoffAddress;
@@ -20,6 +21,7 @@ class AvailableOrderSummary {
 
   const AvailableOrderSummary({
     required this.id,
+    required this.orderNumber,
     required this.restaurantName,
     required this.restaurantAddress,
     required this.dropoffAddress,
@@ -33,6 +35,7 @@ class AvailableOrderSummary {
     final restaurant = json['restaurants'] as Map<String, dynamic>?;
     final delivery = json['delivery_address'] as Map<String, dynamic>? ?? {};
     final fee = (json['delivery_fee'] as num?)?.toInt() ?? 0;
+    final rawId = json['id'] as String;
 
     final restaurantLat = (restaurant?['latitude'] as num?)?.toDouble();
     final restaurantLng = (restaurant?['longitude'] as num?)?.toDouble();
@@ -53,7 +56,11 @@ class AvailableOrderSummary {
     }
 
     return AvailableOrderSummary(
-      id: json['id'] as String,
+      id: rawId,
+      // Use the admin/customer-visible order_number so riders can match what
+      // the customer or restaurant says over the phone (e.g. ORD-BB-07/07/26-0042).
+      // Fall back to a UUID prefix only for orders that pre-date the column.
+      orderNumber: json['order_number'] as String? ?? '#${rawId.substring(0, 8).toUpperCase()}',
       restaurantName: restaurant?['name'] as String? ?? 'Restaurant',
       restaurantAddress: restaurant?['address'] as String? ?? '',
       dropoffAddress: delivery['address'] as String? ?? '',
@@ -220,6 +227,7 @@ class OrderService {
         .select(select)
         .isFilter('rider_id', null)
         .eq('payment_status', 'verified')
+        .eq('order_type', 'delivery')
         .inFilter('status', ['accepted', 'preparing', 'ready'])
         .order('created_at');
 

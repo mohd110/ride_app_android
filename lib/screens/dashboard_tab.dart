@@ -336,13 +336,26 @@ class DashboardTab extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Text(
-                '₹${order.estimatedEarnings.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: AppColors.primary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '₹${order.estimatedEarnings.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    order.orderNumber,
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

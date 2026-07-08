@@ -63,7 +63,7 @@ class TripData {
 
     return TripData(
       rawId: rawId,
-      id: '#${rawId.substring(0, 8).toUpperCase()}',
+      id: json['order_number'] as String? ?? '#${rawId.substring(0, 8).toUpperCase()}',
       restaurant: restaurant?['name'] as String? ?? 'Restaurant',
       restaurantAddress: restaurant?['address'] as String? ?? '',
       dropoffAddress: delivery['address'] as String? ?? '',
@@ -100,6 +100,7 @@ class AppState extends ChangeNotifier {
 
   final OrderService _orders = OrderService();
   RealtimeChannel? _ordersChannel;
+  RealtimeChannel? _activeOrderChannel;
   RealtimeChannel? _notificationsChannel;
   RealtimeChannel? _sessionChannel;
   List<NotificationItem> _notifications = [];
@@ -207,6 +208,11 @@ class AppState extends ChangeNotifier {
   // isNotEmpty guard meant a zero-item order could never pass verification,
   // permanently blocking "Start Delivery".
   bool get isAllItemsVerified => _verifiedItems.every((item) => item);
+
+  /// True only when the restaurant has marked the order as Ready for Pickup.
+  /// The checklist screen gates Start Delivery on this so riders cannot
+  /// collect food before the kitchen has finished preparing it.
+  bool get isOrderReady => _activeOrder?.status == 'ready';
 
   bool isClaimingOrder(String orderId) => _isClaiming && _claimingOrderId == orderId;
 
@@ -426,6 +432,7 @@ class AppState extends ChangeNotifier {
       _gpsProgress = 0.0;
       _navInstruction = 'Head to ${_activeOrder!.restaurant}';
       _setupChecklistFromActiveOrder();
+      _subscribeToActiveOrder();
       await _refreshAvailableOrders();
       return null;
     } catch (e) {
@@ -453,8 +460,16 @@ class AppState extends ChangeNotifier {
   }
 
   Future<String?> startDelivery() async {
+    if (_activeOrder == null) return 'No active order';
+
+    // Re-fetch from DB so the status check is always authoritative.
+    // Prevents bypassing the gate via stale cached data.
+    await _loadActiveOrder();
     final order = _activeOrder;
-    if (order == null) return 'No active order';
+    if (order == null) return 'Order no longer available.';
+    if (order.status != 'ready') {
+      return 'The restaurant has not marked this order as Ready for Pickup yet. Please wait.';
+    }
 
     try {
       await _orders.markOutForDelivery(order.rawId);
@@ -564,6 +579,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> finishSuccessScreen() async {
+    await _activeOrderChannel?.unsubscribe();
+    _activeOrderChannel = null;
     _activeOrder = null;
     _orderState = _isOnline ? OrderState.searching : OrderState.idle;
     notifyListeners();
@@ -809,6 +826,7 @@ class AppState extends ChangeNotifier {
 
     _setupChecklistFromActiveOrder();
     _orderState = _orderStateFromStatus(_activeOrder!.status);
+    _subscribeToActiveOrder();
   }
 
   OrderState _orderStateFromStatus(String status) {
@@ -907,6 +925,50 @@ class AppState extends ChangeNotifier {
   Future<void> _teardownRealtime() async {
     await _ordersChannel?.unsubscribe();
     _ordersChannel = null;
+    await _activeOrderChannel?.unsubscribe();
+    _activeOrderChannel = null;
+  }
+
+  /// Watches the active order row for external status changes. If the order
+  /// is cancelled by the admin or customer while the rider is en route, this
+  /// surfaces the cancellation immediately and resets the rider to searching.
+  void _subscribeToActiveOrder() {
+    final order = _activeOrder;
+    if (order == null) return;
+
+    _activeOrderChannel?.unsubscribe();
+    _activeOrderChannel = supabase
+        .channel('active-order-watch-${order.rawId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: order.rawId,
+          ),
+          callback: (payload) async {
+            final newStatus = payload.newRecord['status'] as String?;
+            if (newStatus == 'cancelled') {
+              await _activeOrderChannel?.unsubscribe();
+              _activeOrderChannel = null;
+              _activeOrder = null;
+              _errorMessage =
+                  'Order ${order.id} was cancelled. You can now accept new orders.';
+              _orderState = _isOnline ? OrderState.searching : OrderState.idle;
+              if (_isOnline) await _refreshAvailableOrders();
+              notifyListeners();
+            } else if (newStatus != null) {
+              // Status changed (e.g., restaurant moved 'preparing' → 'ready').
+              // Re-fetch so isOrderReady flips to true and Start Delivery
+              // unlocks on the checklist screen without the rider refreshing.
+              await _loadActiveOrder();
+              notifyListeners();
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadNotifications() async {
