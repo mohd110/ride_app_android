@@ -40,6 +40,15 @@ class _NewOrderFlashOverlayState extends State<NewOrderFlashOverlay>
       TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.45), weight: 1),
       TweenSequenceItem(tween: Tween(begin: 0.45, end: 0.0), weight: 1),
     ]).animate(_flashController);
+
+    // Covers the case where a pending alert already exists the moment this
+    // widget (re)mounts — e.g. the app process had been killed and the rider
+    // tapped the floating bubble, cold-starting the app straight into this
+    // screen. There's no prior `pulse` value in that case for
+    // didUpdateWidget below to compare against, so it would never fire.
+    if (AppState.instance.pendingAlertOrders.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _triggerAlert());
+    }
   }
 
   @override

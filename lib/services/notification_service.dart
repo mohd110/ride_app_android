@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:vibration/vibration.dart';
 import 'background_service.dart';
 import 'order_service.dart';
 
@@ -17,8 +18,17 @@ class NotificationService {
   static const _channelDescription = 'Alerts when a new delivery order is available to claim';
   static const _soundResource = 'new_order_alert';
 
-  /// How long the alert ring plays before auto-stopping.
-  static const _alertDuration = Duration(seconds: 10);
+  /// Safety cap on how long the ring/vibration continues if the rider never
+  /// opens the app, accepts, or rejects. There's no server-side order TTL to
+  /// key off, so this is what stands in for "the order expired" — every
+  /// other stop condition (open app / accept / reject) calls [stopAlert]
+  /// directly and fires well before this.
+  static const _ringExpiryDuration = Duration(seconds: 60);
+
+  /// Vibrate/pause pattern in ms: [initial delay, buzz, pause, buzz, pause].
+  /// `repeat: 1` loops from the first buzz (skipping the initial delay) for
+  /// as long as the ring is active — mimics an incoming-call buzz.
+  static const _vibrationPattern = [0, 800, 400, 800, 400];
 
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -50,6 +60,18 @@ class NotificationService {
     ));
     await androidPlugin?.requestNotificationsPermission();
 
+    // Route playback over the ringtone stream — like an incoming call —
+    // instead of the default media stream. Media volume is very often turned
+    // down or muted independently of ringer volume, which was why the alert
+    // was barely audible; USAGE_NOTIFICATION_RINGTONE plays on the stream
+    // riders actually expect an "incoming order" alert to use.
+    await _audioPlayer.setAudioContext(AudioContext(
+      android: const AudioContextAndroid(
+        contentType: AndroidContentType.sonification,
+        usageType: AndroidUsageType.notificationRingtone,
+        audioFocus: AndroidAudioFocus.gainTransient,
+      ),
+    ));
     // Loop mode so the alert rings continuously until we stop it.
     await _audioPlayer.setReleaseMode(ReleaseMode.loop);
     await _audioPlayer.setVolume(1.0);
@@ -57,8 +79,9 @@ class NotificationService {
     _initialized = true;
   }
 
-  /// Plays the alert sound in a loop for [_alertDuration] then stops automatically.
-  /// Calling this again while already ringing restarts the 10-second window.
+  /// Plays the alert ring + vibration in a loop until [stopAlert] is called
+  /// (rider opens the app, accepts, or rejects) or [_ringExpiryDuration]
+  /// elapses. Calling this again while already ringing restarts the window.
   Future<void> showNewOrders(List<AvailableOrderSummary> orders) async {
     if (!_initialized || orders.isEmpty) return;
 
@@ -69,15 +92,23 @@ class NotificationService {
         : 'Tap to view available deliveries';
 
     // Start (or restart) the looping alert ring.
-    // The stop-timer is reset so every new-order event gives a fresh 10 s window.
     try {
       _stopTimer?.cancel();
       await _audioPlayer.stop();
-      await _audioPlayer.play(AssetSource('sounds/new_order_alert.ogg'));
-      // Auto-stop after the configured duration.
-      _stopTimer = Timer(_alertDuration, stopAlert);
+      await _audioPlayer.play(AssetSource('sounds/new_order_alert.mp3'));
+      _stopTimer = Timer(_ringExpiryDuration, stopAlert);
     } catch (_) {
       // Best-effort — the system notification sound below is the fallback.
+    }
+
+    // Continuous vibration alongside the ring — separate from the
+    // notification channel's one-shot vibrate-on-post.
+    try {
+      if (await Vibration.hasVibrator()) {
+        await Vibration.vibrate(pattern: _vibrationPattern, repeat: 1);
+      }
+    } catch (_) {
+      // Best-effort — not every device has a controllable vibrator.
     }
 
     try {
@@ -104,12 +135,16 @@ class NotificationService {
     }
   }
 
-  /// Immediately stops the alert ring (called when rider accepts or dismisses).
+  /// Immediately stops the ring + vibration (rider opened the app, accepted,
+  /// or rejected the order).
   Future<void> stopAlert() async {
     _stopTimer?.cancel();
     _stopTimer = null;
     try {
       await _audioPlayer.stop();
+    } catch (_) {}
+    try {
+      await Vibration.cancel();
     } catch (_) {}
   }
 }

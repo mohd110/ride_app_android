@@ -39,11 +39,11 @@ Future<void> main() async {
   await AppState.instance.initialize();
 
   // When the overlay bubble is tapped it sends "open_app" via shareData().
-  // We close the bubble, set the dashboard tab, then bring the Activity
-  // to the foreground via the native method channel.
+  // We route to the correct tab/screen, close the bubble, then bring the
+  // Activity to the foreground via the native method channel.
   FlutterOverlayWindow.overlayListener.listen((event) async {
     if (event == "open_app") {
-      AppState.instance.setTab(0);
+      AppState.instance.handleBubbleTap();
       try {
         await FlutterOverlayWindow.closeOverlay();
       } catch (_) {}
@@ -58,8 +58,40 @@ Future<void> main() async {
   runApp(const RiderConnectApp());
 }
 
-class RiderConnectApp extends StatelessWidget {
+class RiderConnectApp extends StatefulWidget {
   const RiderConnectApp({Key? key}) : super(key: key);
+
+  @override
+  State<RiderConnectApp> createState() => _RiderConnectAppState();
+}
+
+class _RiderConnectAppState extends State<RiderConnectApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Covers every way the app can become visible again — launcher,
+      // recents, or tapping the bubble — so it never lingers on screen
+      // while the app itself is already showing.
+      AppState.instance.onAppForegrounded();
+    } else if (state == AppLifecycleState.paused) {
+      // The rider backgrounded the app (Home, task-switch, another app).
+      // Show the bubble if they're online/mid-delivery — it should stay up
+      // for the whole backgrounded session, not just when a new order lands.
+      AppState.instance.onAppBackgrounded();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

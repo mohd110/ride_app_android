@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart' hide NotificationVisibility;
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:geolocator/geolocator.dart';
@@ -152,6 +153,17 @@ class AppState extends ChangeNotifier {
   List<AvailableOrderSummary> _pendingAlertOrders = [];
   ActiveOrderData? _activeOrder;
   RiderProfile _rider = MockData.rider;
+
+  // ── Floating overlay / app-lifecycle bookkeeping ─────────────────────────
+  // Whether the Flutter UI is currently visible. The overlay bubble should
+  // only ever be shown while this is false — it must never sit on top of
+  // our own app. Defaults true because the app starts in the foreground.
+  bool _isAppInForeground = true;
+  // Set right when the rider taps the floating bubble (before the native
+  // bringToFront/resume happens) so the subsequent onAppForegrounded() call
+  // can tell "opened via the bubble" apart from "opened normally" and skip
+  // clearing the pending-order alert it's meant to surface.
+  bool _openedFromBubbleTap = false;
 
   bool get isLoggedIn => _isLoggedIn;
   bool get isOnline => _isOnline;
@@ -322,6 +334,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> logout() async {
     FlutterForegroundTask.removeTaskDataCallback(_onBackgroundMessage);
+    await NotificationService.instance.stopAlert();
+    await _closeOrderOverlay();
     await stopRiderForegroundService();
     await _sessionChannel?.unsubscribe();
     _sessionChannel = null;
@@ -348,6 +362,7 @@ class AppState extends ChangeNotifier {
     _dailyEarnings = [];
     _tripsHistory = [];
     _payouts = [];
+    _pendingAlertOrders = [];
     notifyListeners();
   }
 
@@ -383,6 +398,9 @@ class AppState extends ChangeNotifier {
 
   Future<void> goOffline() async {
     _isOnline = false;
+    await NotificationService.instance.stopAlert();
+    _pendingAlertOrders = [];
+    await _closeOrderOverlay();
     if (!hasActiveOrder) {
       _orderState = OrderState.idle;
       await _stopPresenceTracking(markOffline: true);
@@ -605,43 +623,120 @@ class AppState extends ChangeNotifier {
       } else if (data['action'] == 'show_overlay') {
         // Background service explicitly requests the bubble without waiting
         // for the full order refresh cycle (faster alert when backgrounded).
-        final count = (data['count'] as int?) ?? 1;
-        _showOrderOverlay(count);
+        // Guard on foreground state too — this message can arrive while the
+        // rider has the app open, since the background isolate keeps running
+        // for the whole online session regardless of app visibility.
+        if (!_isAppInForeground && (_isOnline || hasActiveOrder)) {
+          _showOrderOverlay();
+        }
       }
     }
   }
 
+  // ── App lifecycle → floating overlay bubble ──────────────────────────────────
+
+  /// Called by the app's lifecycle observer when the app is no longer
+  /// visible (Home pressed, task-switched away, screen locked, etc). Shows
+  /// the bubble if the rider is online or mid-delivery — per spec it must
+  /// stay up for the rest of the backgrounded session regardless of whether
+  /// any order alert is pending.
+  Future<void> onAppBackgrounded() async {
+    _isAppInForeground = false;
+    if (_isOnline || hasActiveOrder) {
+      await _showOrderOverlay();
+    }
+  }
+
+  /// Called by the app's lifecycle observer when the app becomes visible
+  /// again — however that happened (launcher, recents, or the bubble tap
+  /// handled in [handleBubbleTap]).
+  Future<void> onAppForegrounded() async {
+    _isAppInForeground = true;
+    await _closeOrderOverlay();
+
+    if (!_openedFromBubbleTap) {
+      // Rider opened the app on their own, not by responding to the bubble
+      // — the pending-order alert is no longer relevant now that they're
+      // looking at the app directly, so stop ringing and clear the badge.
+      await NotificationService.instance.stopAlert();
+      _pendingAlertOrders = [];
+    }
+    _openedFromBubbleTap = false;
+    notifyListeners();
+  }
+
+  /// Called when the rider taps the floating bubble (see main.dart's
+  /// overlay listener). [MainNavigation] already resolves tab 0 to
+  /// [ActiveOrderFlow] vs the dashboard based on [orderState], which covers
+  /// "open the active delivery screen" / "open the dashboard". On top of
+  /// that, if there's a pending order alert, re-trigger the New Order flash
+  /// screen so the rider lands directly on the accept/reject prompt instead
+  /// of the plain dashboard.
+  void handleBubbleTap() {
+    _openedFromBubbleTap = true;
+    if (_pendingAlertOrders.isNotEmpty) {
+      _newOrderPulse++;
+    }
+    setTab(0);
+  }
+
   // ── Floating overlay bubble ──────────────────────────────────────────────────
 
-  /// Shows (or updates) the floating order-alert bubble over other apps.
-  /// Safe to call multiple times — if the bubble is already active it just
-  /// updates the order-count badge; otherwise it creates the window first.
-  Future<void> _showOrderOverlay(int count) async {
+  /// Registered natively on MainActivity's engine (see MainActivity.kt).
+  static const _overlayControlChannel = MethodChannel('rider.overlay/control');
+
+  /// Side of the bubble's window that isn't the visible circle — shadow
+  /// blur/spread plus the badge overshoot in [OverlayBubble]. The native
+  /// window is sized to exactly this box (in device pixels) so it never
+  /// covers more of the screen than the bubble itself, letting every touch
+  /// outside the circle fall through to whatever app is behind it.
+  static const double _overlayBubbleSizeDp = 96;
+
+  /// Brings MainActivity to the foreground from the background, e.g. when a
+  /// new order arrives while the rider has the app backgrounded. Safe to
+  /// call when already in the foreground — it's just a no-op reorder.
+  Future<void> _bringAppToForeground() async {
+    try {
+      await _overlayControlChannel.invokeMethod('bringToFront');
+    } catch (_) {}
+  }
+
+  /// Shows the floating bubble over other apps if it isn't already up, and
+  /// always syncs its badge to the current [_pendingAlertOrders] count.
+  /// Safe to call any time — permission-gated and a no-op if already active
+  /// besides the badge refresh.
+  Future<void> _showOrderOverlay() async {
     try {
       final hasPermission = await FlutterOverlayWindow.isPermissionGranted();
       if (!hasPermission) return;
 
       final isActive = await FlutterOverlayWindow.isActive();
       if (isActive) {
-        // Bubble already showing — just update the order-count badge.
-        await FlutterOverlayWindow.shareData(count);
+        await FlutterOverlayWindow.shareData(_pendingAlertOrders.length);
         return;
       }
 
+      // showOverlay's height/width are raw device pixels (unlike
+      // resizeOverlay, which takes dp) — convert explicitly so the bubble
+      // is a consistent physical size across devices.
+      final density = WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+      final sizePx = (_overlayBubbleSizeDp * density).round();
+
       await FlutterOverlayWindow.showOverlay(
-        height: WindowSize.matchParent,
-        width: WindowSize.matchParent,
-        alignment: OverlayAlignment.center,
+        height: sizePx,
+        width: sizePx,
+        alignment: OverlayAlignment.centerRight,
         flag: OverlayFlag.defaultFlag,
-        enableDrag: false,
-        overlayTitle: 'New Order',
-        overlayContent: 'Tap the bubble to open',
+        enableDrag: true,
+        positionGravity: PositionGravity.auto,
+        overlayTitle: 'Rider Connect',
+        overlayContent: 'Online — tap to open',
         visibility: NotificationVisibility.visibilityPublic,
       );
       // Small delay so the overlay isolate can finish its first frame
       // before we send the count update.
       await Future.delayed(const Duration(milliseconds: 350));
-      await FlutterOverlayWindow.shareData(count);
+      await FlutterOverlayWindow.shareData(_pendingAlertOrders.length);
     } catch (_) {
       // Non-fatal: the full-screen notification already handles the alert.
     }
@@ -743,6 +838,8 @@ class AppState extends ChangeNotifier {
     _forcedLogoutMessage = message;
 
     FlutterForegroundTask.removeTaskDataCallback(_onBackgroundMessage);
+    await NotificationService.instance.stopAlert();
+    await _closeOrderOverlay();
     await stopRiderForegroundService();
     await _sessionChannel?.unsubscribe();
     _sessionChannel = null;
@@ -772,6 +869,7 @@ class AppState extends ChangeNotifier {
     _dailyEarnings = [];
     _tripsHistory = [];
     _payouts = [];
+    _pendingAlertOrders = [];
     notifyListeners();
   }
 
@@ -927,21 +1025,44 @@ class AppState extends ChangeNotifier {
 
     try {
       final fetched = await _orders.fetchAvailableOrders(pricePerKm: _pricePerKm);
+      final fetchedIds = fetched.map((o) => o.id).toSet();
 
       if (_hasInitialOrdersSnapshot) {
         final newOnes = fetched.where((o) => !_knownOrderIds.contains(o.id)).toList();
         if (newOnes.isNotEmpty) {
           _newOrderPulse++;
-          _pendingAlertOrders = newOnes;
+          // Accumulate rather than overwrite — if a second order arrives
+          // before the rider has acted on the first, the badge should read
+          // 2, not reset back to 1.
+          final existingAlertIds = _pendingAlertOrders.map((o) => o.id).toSet();
+          _pendingAlertOrders = [
+            ..._pendingAlertOrders,
+            ...newOnes.where((o) => !existingAlertIds.contains(o.id)),
+          ];
           NotificationService.instance.showNewOrders(newOnes);
-          _showOrderOverlay(newOnes.length);
+          // Only the system bubble is gated to backgrounded — the in-app
+          // flash alert (NewOrderFlashOverlay) already covers foreground.
+          if (!_isAppInForeground) {
+            await _showOrderOverlay();
+            // Bring the app straight to the foreground on a new order —
+            // don't make the rider hunt for the bubble and tap it.
+            await _bringAppToForeground();
+          }
         }
       } else {
         _hasInitialOrdersSnapshot = true;
       }
 
+      // Drop any pending-alert order that's no longer available (claimed by
+      // someone else, cancelled, etc.) so the bubble badge stays accurate
+      // even when nothing new arrived this cycle.
+      _pendingAlertOrders = _pendingAlertOrders.where((o) => fetchedIds.contains(o.id)).toList();
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.shareData(_pendingAlertOrders.length);
+      }
+
       _availableOrders = fetched;
-      _knownOrderIds = fetched.map((o) => o.id).toSet();
+      _knownOrderIds = fetchedIds;
       if (_availableOrders.isNotEmpty) {
         _errorMessage = null;
       }
