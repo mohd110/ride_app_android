@@ -24,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
+    // login() clears forcedLogoutMessage internally.
     final error = await AppState.instance.login(
       _emailController.text,
       _passController.text,
@@ -42,6 +43,8 @@ class _LoginScreenState extends State<LoginScreen> {
       builder: (context, _) {
         final loading = AppState.instance.isLoading;
 
+        final kickMessage = AppState.instance.forcedLogoutMessage;
+
         return Scaffold(
           backgroundColor: AppColors.background,
           body: SafeArea(
@@ -50,6 +53,34 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (kickMessage != null) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF3CD),
+                        border: Border.all(color: const Color(0xFFFFD700)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: Color(0xFFB8860B), size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              kickMessage,
+                              style: const TextStyle(
+                                color: Color(0xFF7B6100),
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,

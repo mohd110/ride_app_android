@@ -1,10 +1,14 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config/supabase_client.dart';
 import 'data/mock_data.dart';
+import 'services/background_service.dart';
 import 'services/notification_service.dart';
 import 'services/order_service.dart';
 
@@ -91,9 +95,13 @@ class TripData {
 class AppState extends ChangeNotifier {
   static final AppState instance = AppState();
 
+  static const _onlinePrefKey = 'rider_is_online';
+  static const _deviceIdKey = 'device_id';
+
   final OrderService _orders = OrderService();
   RealtimeChannel? _ordersChannel;
   RealtimeChannel? _notificationsChannel;
+  RealtimeChannel? _sessionChannel;
   List<NotificationItem> _notifications = [];
 
   bool _isLoggedIn = false;
@@ -103,6 +111,8 @@ class AppState extends ChangeNotifier {
   String? _claimingOrderId;
   String? _errorMessage;
   String? _riderId;
+  String? _deviceId;
+  String? _forcedLogoutMessage;
   int _currentTab = 0;
   OrderState _orderState = OrderState.idle;
 
@@ -148,6 +158,7 @@ class AppState extends ChangeNotifier {
   String? get claimingOrderId => _claimingOrderId;
   String? get errorMessage => _errorMessage;
   String? get riderId => _riderId;
+  String? get forcedLogoutMessage => _forcedLogoutMessage;
   int get currentTab => _currentTab;
   OrderState get orderState => _orderState;
 
@@ -203,8 +214,19 @@ class AppState extends ChangeNotifier {
     final session = supabase.auth.currentSession;
     if (session == null) return;
 
+    await _initDeviceId();
     _isLoggedIn = true;
     _riderId = session.user.id;
+
+    // Register the background→main message listener before anything else so
+    // we don't miss a "refresh_orders" message that arrives while loading.
+    FlutterForegroundTask.addTaskDataCallback(_onBackgroundMessage);
+
+    // Register this device as the active session and subscribe to detect if
+    // another device supersedes it.
+    await _registerSession();
+    _subscribeToSessionInvalidation();
+
     await _loadEarningsData();
     final profileError = await _loadProfile();
     if (profileError != null) {
@@ -214,12 +236,24 @@ class AppState extends ChangeNotifier {
     await _loadNotifications();
     _subscribeToNotifications();
     await _syncActiveOrder();
-    if (!hasActiveOrder) {
-      await goOnline();
-    } else {
+
+    if (hasActiveOrder) {
+      // Mid-delivery resume — keep the background service alive regardless of
+      // the rider's online preference (they may have backgrounded the app).
       _errorMessage =
           'You have an active delivery in progress. Finish it to see new orders.';
+      await startRiderForegroundService();
       await _startPresenceTracking();
+    } else {
+      // Restore the rider's online/offline choice from before the app closed.
+      // Default: true on first install so riders go online automatically.
+      final prefs = await SharedPreferences.getInstance();
+      final wasOnline = prefs.getBool(_onlinePrefKey) ?? true;
+      if (wasOnline) {
+        await goOnline();
+      } else {
+        _orderState = OrderState.idle;
+      }
     }
     notifyListeners();
   }
@@ -240,10 +274,18 @@ class AppState extends ChangeNotifier {
         return 'Login failed. Please try again.';
       }
 
+      await _initDeviceId();
       _isLoggedIn = true;
       _riderId = user.id;
       _currentTab = 0;
       _orderState = OrderState.idle;
+      _forcedLogoutMessage = null; // clear any previous kick message
+
+      FlutterForegroundTask.addTaskDataCallback(_onBackgroundMessage);
+
+      // Register this login — deactivates all other devices immediately.
+      await _registerSession();
+      _subscribeToSessionInvalidation();
 
       await _loadEarningsData();
       final profileError = await _loadProfile();
@@ -254,8 +296,10 @@ class AppState extends ChangeNotifier {
       _subscribeToNotifications();
       await _syncActiveOrder();
       if (!hasActiveOrder) {
+        // Fresh login: always go online (rider opened the app intending to work).
         await goOnline();
       } else {
+        await startRiderForegroundService();
         await _startPresenceTracking();
       }
       return null;
@@ -270,15 +314,24 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    FlutterForegroundTask.removeTaskDataCallback(_onBackgroundMessage);
+    await stopRiderForegroundService();
+    await _sessionChannel?.unsubscribe();
+    _sessionChannel = null;
     await _teardownRealtime();
     await _notificationsChannel?.unsubscribe();
     _notificationsChannel = null;
     await _stopPresenceTracking(markOffline: true);
+    // Clear the online preference so the next login starts fresh.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_onlinePrefKey);
     await supabase.auth.signOut();
 
     _isLoggedIn = false;
     _isOnline = false;
     _riderId = null;
+    _deviceId = null;
+    _forcedLogoutMessage = null;
     _orderState = OrderState.idle;
     _availableOrders = [];
     _activeOrder = null;
@@ -306,6 +359,15 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
 
+    // Persist the preference BEFORE starting work so that if the app is killed
+    // mid-startup, the saved state is already "online."
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onlinePrefKey, true);
+
+    // Start the Android foreground service so order alerts continue arriving
+    // even when the user backgrounds or swipes away the app.
+    await startRiderForegroundService();
+
     await _fetchPricePerKm();
     await _refreshAvailableOrders();
     _subscribeToOrders();
@@ -317,13 +379,19 @@ class AppState extends ChangeNotifier {
     if (!hasActiveOrder) {
       _orderState = OrderState.idle;
       await _stopPresenceTracking(markOffline: true);
+      // Stop the foreground service — rider explicitly chose to go offline.
+      await stopRiderForegroundService();
     }
     await _teardownRealtime();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_onlinePrefKey, false);
     notifyListeners();
   }
 
   Future<String?> claimOrder(String orderId) async {
     if (_riderId == null || _isClaiming) return 'Not signed in';
+    if (_deviceId == null) return 'Device not ready. Please restart the app.';
 
     // Stop the alert ring as soon as the rider taps Accept.
     await NotificationService.instance.stopAlert();
@@ -334,8 +402,17 @@ class AppState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final error = await _orders.claimOrder(orderId, _riderId!);
+      final error = await _orders.claimOrder(orderId, _deviceId!);
       if (error != null) {
+        if (error == 'session_expired') {
+          // Another device logged in and this device's session is no longer
+          // valid.  Force-logout immediately.
+          await _forceLogout(
+            'Your account was signed in on another device. '
+            'Please sign in again to continue.',
+          );
+          return 'Signed out — another device took over this account.';
+        }
         await _refreshAvailableOrders();
         return error;
       }
@@ -493,7 +570,138 @@ class AppState extends ChangeNotifier {
 
     if (_isOnline) {
       await _refreshAvailableOrders();
+    } else {
+      // Delivery finished and rider is offline — no longer need the service.
+      await stopRiderForegroundService();
     }
+  }
+
+  /// Called by the foreground service's background isolate when it detects a
+  /// new order via Realtime or polling. Refreshes the available-orders list so
+  /// the UI updates immediately if the app is in the background (but not killed).
+  void _onBackgroundMessage(Object data) {
+    if (data is Map && data['action'] == 'refresh_orders') {
+      _refreshAvailableOrders();
+    }
+  }
+
+  // ── Device identity ─────────────────────────────────────────────────────────
+
+  /// Loads (or generates and persists) a stable device UUID. The same ID
+  /// is used by the foreground service's background isolate (via shared
+  /// SharedPreferences) so both isolates always agree on which device this is.
+  Future<void> _initDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString(_deviceIdKey);
+    if (id == null) {
+      id = _generateDeviceId();
+      await prefs.setString(_deviceIdKey, id);
+    }
+    _deviceId = id;
+  }
+
+  String _generateDeviceId() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8] & 0x3f) | 0x80; // variant
+    final h = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+  }
+
+  // ── Session management ───────────────────────────────────────────────────────
+
+  /// Tells the backend that this device is now the active one. The
+  /// SECURITY DEFINER RPC atomically deactivates all other sessions for
+  /// this rider — those devices will see the change via Realtime within
+  /// ~1 second and auto-logout.
+  Future<void> _registerSession() async {
+    final deviceId = _deviceId;
+    if (deviceId == null) return;
+    try {
+      await supabase.rpc('register_rider_session', params: {
+        'p_device_id': deviceId,
+      });
+    } catch (_) {
+      // Non-fatal. If the table/RPC doesn't exist yet (migration not run),
+      // everything still works — single-session enforcement is just inactive.
+    }
+  }
+
+  /// Watches the rider_sessions table for this rider. If OUR device row
+  /// is flipped to is_active=false it means a different phone just logged in
+  /// — force-logout this device immediately.
+  void _subscribeToSessionInvalidation() {
+    final riderId = _riderId;
+    final deviceId = _deviceId;
+    if (riderId == null || deviceId == null) return;
+
+    _sessionChannel?.unsubscribe();
+    _sessionChannel = supabase
+        .channel('session-watch-$riderId-$deviceId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'rider_sessions',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'rider_id',
+            value: riderId,
+          ),
+          callback: (payload) {
+            final row = payload.newRecord;
+            final rowDeviceId = row['device_id'] as String?;
+            final isActive = row['is_active'] as bool? ?? true;
+            if (rowDeviceId == deviceId && !isActive) {
+              _forceLogout(
+                'Your account was signed in on another device. '
+                'Please sign in again to continue.',
+              );
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  /// Immediately stops all activity on this device and returns the user to
+  /// the login screen with [message] displayed. Called when another device
+  /// takes over this rider's session.
+  Future<void> _forceLogout(String message) async {
+    if (!_isLoggedIn) return;
+
+    _forcedLogoutMessage = message;
+
+    FlutterForegroundTask.removeTaskDataCallback(_onBackgroundMessage);
+    await stopRiderForegroundService();
+    await _sessionChannel?.unsubscribe();
+    _sessionChannel = null;
+    await _teardownRealtime();
+    await _notificationsChannel?.unsubscribe();
+    _notificationsChannel = null;
+    // Don't mark offline — the new active device is now the presence owner.
+    await _stopPresenceTracking(markOffline: false);
+
+    // Sign out locally only (scope: local) so we don't invalidate the new
+    // device's JWT — Supabase JWTs are stateless; local signout just removes
+    // this device's stored refresh token.
+    try {
+      await supabase.auth.signOut(scope: SignOutScope.local);
+    } catch (_) {}
+
+    _isLoggedIn = false;
+    _isOnline = false;
+    _riderId = null;
+    _deviceId = null;
+    _orderState = OrderState.idle;
+    _availableOrders = [];
+    _activeOrder = null;
+    _rider = MockData.rider;
+    _notifications = [];
+    _earningsSummary = const EarningsSummary();
+    _dailyEarnings = [];
+    _tripsHistory = [];
+    _payouts = [];
+    notifyListeners();
   }
 
   Future<String?> _loadProfile() async {

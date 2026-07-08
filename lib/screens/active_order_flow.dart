@@ -148,6 +148,7 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
               _fabBtn(Icons.directions_rounded, onTap: () => _launchNavigation(
                 isToCustomer ? order.customerLat : order.restaurantLat,
                 isToCustomer ? order.customerLng : order.restaurantLng,
+                isToCustomer ? order.customerAddress : order.restaurantAddress,
               )),
               const SizedBox(height: 10),
               _fabBtn(Icons.chat_bubble_outline_rounded, onTap: () => Navigator.of(context).push(
@@ -232,19 +233,28 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
   /// maps.google.com on web) rather than building a custom routing engine —
   /// this gets live traffic-aware ETA and automatic rerouting on deviation
   /// for free, maintained by Google instead of reimplemented here.
-  Future<void> _launchNavigation(double? lat, double? lng) async {
-    if (lat == null || lng == null) {
+  ///
+  /// Falls back to the saved address text when lat/lng are missing (some
+  /// customer-app checkout flows don't capture GPS coordinates) — Google
+  /// Maps geocodes a plain address string just fine, so this is strictly
+  /// better than refusing to navigate at all.
+  Future<void> _launchNavigation(double? lat, double? lng, String fallbackAddress) async {
+    final Uri uri;
+    if (lat != null && lng != null) {
+      uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving');
+    } else if (fallbackAddress.trim().isNotEmpty) {
+      uri = Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=${Uri.encodeComponent(fallbackAddress)}&travelmode=driving',
+      );
+    } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No location saved for this stop yet.')),
+          const SnackBar(content: Text('No location or address saved for this stop.')),
         );
       }
       return;
     }
 
-    final uri = Uri.parse(
-      'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving',
-    );
     final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!launched && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

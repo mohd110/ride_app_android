@@ -250,19 +250,37 @@ class OrderService {
     return ActiveOrderData.fromSupabase(rows.first as Map<String, dynamic>, pricePerKm: pricePerKm);
   }
 
-  /// Returns null on success, or an error message.
-  Future<String?> claimOrder(String orderId, String riderId) async {
-    final claimed = await supabase
-        .from('orders')
-        .update({'rider_id': riderId})
-        .eq('id', orderId)
-        .filter('rider_id', 'is', null)
-        .select();
+  /// Atomically claims [orderId] for the authenticated rider on [deviceId].
+  ///
+  /// Returns null on success, 'session_expired' when the caller should
+  /// force-logout, or a human-readable error string otherwise.
+  ///
+  /// Uses the claim_order_atomic SECURITY DEFINER RPC which:
+  ///  1. Verifies the device still has an active session.
+  ///  2. Updates orders WHERE rider_id IS NULL in a single atomic statement —
+  ///     the first concurrent caller wins, all others get 'already_claimed'.
+  Future<String?> claimOrder(String orderId, String deviceId) async {
+    try {
+      final result = await supabase.rpc('claim_order_atomic', params: {
+        'p_order_id': orderId,
+        'p_device_id': deviceId,
+      }) as String?;
 
-    if ((claimed as List).isEmpty) {
-      return 'Order already taken by another rider';
+      switch (result) {
+        case 'success':
+          return null;
+        case 'already_claimed':
+          return 'This order was just claimed by another rider.';
+        case 'session_expired':
+          return 'session_expired'; // AppState handles this specially
+        default:
+          return 'Could not claim order. Please try again.';
+      }
+    } on PostgrestException catch (e) {
+      return e.message.isNotEmpty ? e.message : 'Could not claim order.';
+    } catch (_) {
+      return 'Could not claim order. Please try again.';
     }
-    return null;
   }
 
   Future<void> markOutForDelivery(String orderId) async {

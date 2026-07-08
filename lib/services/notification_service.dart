@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'background_service.dart';
 import 'order_service.dart';
 
 class NotificationService {
@@ -26,6 +27,10 @@ class NotificationService {
 
   Future<void> initialize() async {
     if (_initialized) return;
+
+    // Configure the Android foreground-service options (channel, restart on
+    // boot, wake-lock). Must happen before the service is started.
+    initForegroundTask();
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _plugin.initialize(
@@ -90,6 +95,7 @@ class NotificationService {
             playSound: true,
             sound: RawResourceAndroidNotificationSound(_soundResource),
             enableVibration: true,
+            fullScreenIntent: true,
           ),
         ),
       );
