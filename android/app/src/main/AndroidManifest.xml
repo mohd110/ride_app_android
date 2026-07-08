@@ -13,6 +13,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
     <!-- Restart the foreground service automatically after a device reboot. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Draw the floating order-alert bubble over other apps (like Rapido / Uber). -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <!-- Show full-screen intent on the lock screen when a new order arrives. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <!-- Request that the OS does not kill the background service for battery. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- Required by flutter_overlay_window's OverlayService on Android 14+. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
         android:label="riderapp"
@@ -45,6 +53,17 @@
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="dataSync"
             android:exported="false"/>
+
+        <!-- flutter_overlay_window: the service that renders the floating
+             order-alert bubble over other apps using SYSTEM_ALERT_WINDOW. -->
+        <service
+            android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Displays a floating delivery-alert bubble when new orders arrive"/>
+        </service>
 
         <!-- flutter_foreground_task: restarts the service automatically after
              the device reboots so the rider doesn't miss orders after a restart. -->

@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart' hide NotificationVisibility;
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -399,9 +400,10 @@ class AppState extends ChangeNotifier {
     if (_riderId == null || _isClaiming) return 'Not signed in';
     if (_deviceId == null) return 'Device not ready. Please restart the app.';
 
-    // Stop the alert ring as soon as the rider taps Accept.
+    // Stop the alert ring and close the floating bubble.
     await NotificationService.instance.stopAlert();
     _pendingAlertOrders = [];
+    await _closeOrderOverlay();
 
     _isClaiming = true;
     _claimingOrderId = orderId;
@@ -597,9 +599,61 @@ class AppState extends ChangeNotifier {
   /// new order via Realtime or polling. Refreshes the available-orders list so
   /// the UI updates immediately if the app is in the background (but not killed).
   void _onBackgroundMessage(Object data) {
-    if (data is Map && data['action'] == 'refresh_orders') {
-      _refreshAvailableOrders();
+    if (data is Map) {
+      if (data['action'] == 'refresh_orders') {
+        _refreshAvailableOrders();
+      } else if (data['action'] == 'show_overlay') {
+        // Background service explicitly requests the bubble without waiting
+        // for the full order refresh cycle (faster alert when backgrounded).
+        final count = (data['count'] as int?) ?? 1;
+        _showOrderOverlay(count);
+      }
     }
+  }
+
+  // ── Floating overlay bubble ──────────────────────────────────────────────────
+
+  /// Shows (or updates) the floating order-alert bubble over other apps.
+  /// Safe to call multiple times — if the bubble is already active it just
+  /// updates the order-count badge; otherwise it creates the window first.
+  Future<void> _showOrderOverlay(int count) async {
+    try {
+      final hasPermission = await FlutterOverlayWindow.isPermissionGranted();
+      if (!hasPermission) return;
+
+      final isActive = await FlutterOverlayWindow.isActive();
+      if (isActive) {
+        // Bubble already showing — just update the order-count badge.
+        await FlutterOverlayWindow.shareData(count);
+        return;
+      }
+
+      await FlutterOverlayWindow.showOverlay(
+        height: WindowSize.matchParent,
+        width: WindowSize.matchParent,
+        alignment: OverlayAlignment.center,
+        flag: OverlayFlag.defaultFlag,
+        enableDrag: false,
+        overlayTitle: 'New Order',
+        overlayContent: 'Tap the bubble to open',
+        visibility: NotificationVisibility.visibilityPublic,
+      );
+      // Small delay so the overlay isolate can finish its first frame
+      // before we send the count update.
+      await Future.delayed(const Duration(milliseconds: 350));
+      await FlutterOverlayWindow.shareData(count);
+    } catch (_) {
+      // Non-fatal: the full-screen notification already handles the alert.
+    }
+  }
+
+  /// Closes the floating bubble if it is currently visible.
+  Future<void> _closeOrderOverlay() async {
+    try {
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+      }
+    } catch (_) {}
   }
 
   // ── Device identity ─────────────────────────────────────────────────────────
@@ -880,6 +934,7 @@ class AppState extends ChangeNotifier {
           _newOrderPulse++;
           _pendingAlertOrders = newOnes;
           NotificationService.instance.showNewOrders(newOnes);
+          _showOrderOverlay(newOnes.length);
         }
       } else {
         _hasInitialOrdersSnapshot = true;
@@ -906,6 +961,7 @@ class AppState extends ChangeNotifier {
   Future<void> dismissAlert() async {
     await NotificationService.instance.stopAlert();
     _pendingAlertOrders = [];
+    await _closeOrderOverlay();
     notifyListeners();
   }
 

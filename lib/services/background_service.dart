@@ -241,8 +241,9 @@ class _RiderTaskHandler extends TaskHandler {
       title: 'New Order Available',
       body: 'A new delivery is ready for pickup. Tap to claim it.',
     );
-    // Tell the main isolate to refresh the available orders list (if the
-    // app is in the background but not fully terminated).
+    // Tell the main isolate to refresh the list AND show the floating bubble
+    // immediately (before the refresh cycle completes).
+    FlutterForegroundTask.sendDataToMain({'action': 'show_overlay', 'count': 1});
     FlutterForegroundTask.sendDataToMain({'action': 'refresh_orders'});
   }
 
@@ -266,6 +267,7 @@ class _RiderTaskHandler extends TaskHandler {
         title: 'New Order Available',
         body: 'A new delivery is ready for pickup. Tap to claim it.',
       );
+      FlutterForegroundTask.sendDataToMain({'action': 'show_overlay', 'count': 1});
       FlutterForegroundTask.sendDataToMain({'action': 'refresh_orders'});
       return;
     }
