@@ -368,6 +368,24 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
               ),
             ],
           ),
+          if (!allVerified && state.checklistItems.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: state.verifyAllItems,
+                icon: const Icon(Icons.done_all_rounded, size: 18),
+                label: const Text('SELECT ALL ITEMS'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.primary,
+                  side: const BorderSide(color: AppColors.primary, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           Expanded(
             child: ListView.builder(

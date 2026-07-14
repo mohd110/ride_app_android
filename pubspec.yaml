@@ -1,6 +1,6 @@
 name: riderapp
 description: Rider Connect App - Hybrid Mobile and Web Simulator.
-version: 4.8.2+1
+version: 4.9.2+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -21,6 +21,7 @@ dependencies:
   shared_preferences: ^2.3.2
   flutter_overlay_window: ^0.5.0
   vibration: ^3.2.0
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:

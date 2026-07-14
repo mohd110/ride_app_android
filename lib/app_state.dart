@@ -13,6 +13,7 @@ import 'data/mock_data.dart';
 import 'services/background_service.dart';
 import 'services/notification_service.dart';
 import 'services/order_service.dart';
+import 'services/push_notification_service.dart';
 
 enum OrderState {
   idle,
@@ -479,6 +480,15 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Marks every checklist item verified in one tap — lets the rider skip
+  /// checking each item individually when the whole bag is already correct.
+  void verifyAllItems() {
+    for (int i = 0; i < _verifiedItems.length; i++) {
+      _verifiedItems[i] = true;
+    }
+    notifyListeners();
+  }
+
   Future<String?> startDelivery() async {
     if (_activeOrder == null) return 'No active order';
 
@@ -493,10 +503,17 @@ class AppState extends ChangeNotifier {
 
     try {
       await _orders.markOutForDelivery(order.rawId);
+      PushNotificationService.sendOrderStatusPush(
+        customerId: order.customerId,
+        orderId: order.rawId,
+        title: '🛵 On the Way!',
+        body: 'Your rider has picked up your order.',
+      );
       _activeOrder = ActiveOrderData(
         rawId: order.rawId,
         id: order.id,
         status: 'out_for_delivery',
+        customerId: order.customerId,
         restaurant: order.restaurant,
         restaurantAddress: order.restaurantAddress,
         restaurantPhone: order.restaurantPhone,
@@ -574,6 +591,12 @@ class AppState extends ChangeNotifier {
 
     try {
       final actualPayment = await _orders.markDelivered(order.rawId);
+      PushNotificationService.sendOrderStatusPush(
+        customerId: order.customerId,
+        orderId: order.rawId,
+        title: '🎉 Delivered!',
+        body: 'Your order has been delivered. Enjoy!',
+      );
       _distanceToRestaurantKm = null;
       _distanceToCustomerKm = null;
       _orderState = OrderState.completed;

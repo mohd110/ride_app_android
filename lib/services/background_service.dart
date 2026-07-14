@@ -232,9 +232,9 @@ class _RiderTaskHandler extends TaskHandler {
 
     if (id == null) return;
     if (_seenOrderIds.contains(id)) return;
-    // Only alert for unassigned orders at a restaurant-accepted status.
+    // Only alert for unassigned orders that are ready for pickup.
     if (riderId != null) return;
-    if (status != 'ready' && status != 'preparing') return;
+    if (status != 'ready') return;
 
     await _markSeen(id);
     await _showOrderNotification(
@@ -258,9 +258,9 @@ class _RiderTaskHandler extends TaskHandler {
 
     final myId = Supabase.instance.client.auth.currentUser?.id;
 
-    // Alert if this order just became available (unassigned, ready/preparing).
+    // Alert if this order just became available (unassigned, ready).
     if (riderId == null &&
-        (status == 'ready' || status == 'preparing') &&
+        status == 'ready' &&
         !_seenOrderIds.contains(id)) {
       await _markSeen(id);
       await _showOrderNotification(
@@ -293,7 +293,7 @@ class _RiderTaskHandler extends TaskHandler {
       final rows = await client
           .from('orders')
           .select('id, status, rider_id')
-          .inFilter('status', ['ready', 'preparing'])
+          .inFilter('status', ['ready'])
           .isFilter('rider_id', null)
           .limit(20);
 

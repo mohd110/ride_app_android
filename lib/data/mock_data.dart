@@ -76,6 +76,10 @@ class ActiveOrderData {
   final String rawId;
   final String id;
   final String status;
+  // UUID of the customer who placed the order — used to target the push
+  // notification sent via PushNotificationService when the rider marks the
+  // order out for delivery / delivered. Null for mock/fallback data.
+  final String? customerId;
   final String restaurant;
   final String restaurantAddress;
   final String restaurantPhone;
@@ -98,6 +102,7 @@ class ActiveOrderData {
     required this.rawId,
     required this.id,
     this.status = 'accepted',
+    this.customerId,
     required this.restaurant,
     required this.restaurantAddress,
     required this.restaurantPhone,
@@ -161,6 +166,7 @@ class ActiveOrderData {
       rawId: rawId,
       id: json['order_number'] as String? ?? '#${rawId.substring(0, 8).toUpperCase()}',
       status: json['status'] as String? ?? 'accepted',
+      customerId: json['customer_id'] as String?,
       restaurant: restaurant?['name'] as String? ?? 'Restaurant',
       restaurantAddress: restaurant?['address'] as String? ?? '',
       restaurantPhone: restaurant?['phone'] as String? ?? '',

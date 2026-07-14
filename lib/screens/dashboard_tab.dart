@@ -256,7 +256,7 @@ class DashboardTab extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         const Text(
-          'Restaurant-accepted orders waiting for a rider. Tap Accept to claim.',
+          'Orders ready for pickup waiting for a rider. Tap Accept to claim.',
           style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         if (state.errorMessage != null) ...[

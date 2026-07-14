@@ -228,7 +228,7 @@ class OrderService {
         .isFilter('rider_id', null)
         .eq('payment_status', 'verified')
         .eq('order_type', 'delivery')
-        .inFilter('status', ['accepted', 'preparing', 'ready'])
+        .inFilter('status', ['ready'])
         .order('created_at');
 
     return rows as List<dynamic>;
