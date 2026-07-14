@@ -1,20 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart' as ll;
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../services/directions_service.dart';
 import '../theme/app_colors.dart';
 
-/// Renders pickup/drop-off/rider pins on OpenStreetMap tiles — no API key,
-/// billing, or Google Cloud Console setup required at all. Real turn-by-turn
-/// navigation is handled separately by launching the actual Google Maps app
-/// (see ActiveOrderFlow._launchNavigation), so this widget only needs to show
-/// an overview, not drive real routing — a perfect fit for a free tile layer.
-class DeliveryRouteMap extends StatelessWidget {
+/// Renders rider/restaurant/customer pins on a Google Map, with the real
+/// driving route (via the Google Directions API) drawn between the rider
+/// and whichever stop is currently active — restaurant while heading to
+/// pickup, customer after pickup.
+///
+/// The route is refetched only when the rider has moved meaningfully or
+/// enough time has passed (see [_minRefetchInterval]/[_minMovementMeters])
+/// to keep Directions API usage — a paid, per-request service — low; between
+/// refetches the rider marker still moves every rebuild, it just doesn't
+/// trigger a new route request.
+class DeliveryRouteMap extends StatefulWidget {
   final double? restaurantLat;
   final double? restaurantLng;
   final double? customerLat;
   final double? customerLng;
   final double? riderLat;
   final double? riderLng;
+  final bool isToCustomer;
 
   const DeliveryRouteMap({
     Key? key,
@@ -24,17 +31,147 @@ class DeliveryRouteMap extends StatelessWidget {
     required this.customerLng,
     this.riderLat,
     this.riderLng,
+    this.isToCustomer = false,
   }) : super(key: key);
 
-  static const _fallbackCenter = ll.LatLng(26.4499, 80.3319);
+  @override
+  State<DeliveryRouteMap> createState() => _DeliveryRouteMapState();
+}
 
-  ll.LatLng? get _restaurantPos =>
-      restaurantLat != null && restaurantLng != null ? ll.LatLng(restaurantLat!, restaurantLng!) : null;
+class _DeliveryRouteMapState extends State<DeliveryRouteMap> {
+  static const _fallbackCenter = LatLng(26.4499, 80.3319);
 
-  ll.LatLng? get _customerPos =>
-      customerLat != null && customerLng != null ? ll.LatLng(customerLat!, customerLng!) : null;
+  // Don't hit the (paid) Directions API more than this often...
+  static const _minRefetchInterval = Duration(seconds: 45);
+  // ...unless the rider has moved at least this far, in which case the
+  // cached route is stale enough to be worth the request regardless of time.
+  static const _minMovementMeters = 150.0;
 
-  ll.LatLng? get _riderPos => riderLat != null && riderLng != null ? ll.LatLng(riderLat!, riderLng!) : null;
+  GoogleMapController? _controller;
+  Set<Polyline> _polylines = {};
+  bool _isFetchingRoute = false;
+  DateTime? _lastFetchTime;
+  LatLng? _lastFetchOrigin;
+
+  LatLng? get _restaurantPos =>
+      widget.restaurantLat != null && widget.restaurantLng != null
+          ? LatLng(widget.restaurantLat!, widget.restaurantLng!)
+          : null;
+
+  LatLng? get _customerPos =>
+      widget.customerLat != null && widget.customerLng != null
+          ? LatLng(widget.customerLat!, widget.customerLng!)
+          : null;
+
+  LatLng? get _riderPos =>
+      widget.riderLat != null && widget.riderLng != null ? LatLng(widget.riderLat!, widget.riderLng!) : null;
+
+  LatLng? get _activeDestination => widget.isToCustomer ? _customerPos : _restaurantPos;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeRefetchRoute(force: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant DeliveryRouteMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final destinationChanged = oldWidget.isToCustomer != widget.isToCustomer;
+    final riderMoved = oldWidget.riderLat != widget.riderLat || oldWidget.riderLng != widget.riderLng;
+
+    if (destinationChanged) {
+      // A new leg of the trip (pickup done, now heading to the customer) —
+      // the old route no longer applies, and forcing a refetch bypasses the
+      // throttle since this genuinely is a new route, not just movement.
+      setState(() => _polylines = {});
+      _maybeRefetchRoute(force: true);
+    } else if (riderMoved) {
+      _maybeRefetchRoute(); // Throttled internally.
+    }
+  }
+
+  Future<void> _maybeRefetchRoute({bool force = false}) async {
+    final origin = _riderPos;
+    final destination = _activeDestination;
+    if (origin == null || destination == null) return;
+    if (_isFetchingRoute) return;
+
+    if (!force && _lastFetchTime != null && _lastFetchOrigin != null) {
+      final elapsed = DateTime.now().difference(_lastFetchTime!);
+      final movedMeters = Geolocator.distanceBetween(
+        _lastFetchOrigin!.latitude,
+        _lastFetchOrigin!.longitude,
+        origin.latitude,
+        origin.longitude,
+      );
+      if (elapsed < _minRefetchInterval && movedMeters < _minMovementMeters) {
+        return; // Too soon and hasn't moved enough — the marker still moves via build().
+      }
+    }
+
+    _isFetchingRoute = true;
+    final result = await DirectionsService.fetchDrivingRoute(origin: origin, destination: destination);
+    _isFetchingRoute = false;
+    if (!mounted) return;
+
+    _lastFetchTime = DateTime.now();
+    _lastFetchOrigin = origin;
+
+    if (result == null) {
+      // Directions API unavailable/denied/no-route/network error — keep
+      // whatever polyline (if any) was already showing rather than clearing
+      // a still-valid route just because a refresh failed, and keep the
+      // markers up either way so navigation can continue.
+      return;
+    }
+
+    setState(() {
+      _polylines = {
+        Polyline(
+          polylineId: const PolylineId('active_route'),
+          points: result.points,
+          color: AppColors.primary,
+          width: 5,
+          jointType: JointType.round,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+        ),
+      };
+    });
+
+    _animateToBounds(_boundsFor([origin, destination, ...result.points]));
+  }
+
+  void _fitToAvailablePoints() {
+    final points = [_restaurantPos, _customerPos, _riderPos].whereType<LatLng>().toList();
+    if (points.length < 2) return;
+    _animateToBounds(_boundsFor(points));
+  }
+
+  LatLngBounds _boundsFor(List<LatLng> points) {
+    var minLat = points.first.latitude, maxLat = points.first.latitude;
+    var minLng = points.first.longitude, maxLng = points.first.longitude;
+    for (final p in points) {
+      if (p.latitude < minLat) minLat = p.latitude;
+      if (p.latitude > maxLat) maxLat = p.latitude;
+      if (p.longitude < minLng) minLng = p.longitude;
+      if (p.longitude > maxLng) maxLng = p.longitude;
+    }
+    return LatLngBounds(southwest: LatLng(minLat, minLng), northeast: LatLng(maxLat, maxLng));
+  }
+
+  Future<void> _animateToBounds(LatLngBounds bounds) async {
+    final controller = _controller;
+    if (controller == null) return;
+    try {
+      await controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 72));
+    } catch (_) {
+      // Bounds too small (e.g. rider is essentially at the destination) or
+      // the map isn't laid out yet — non-fatal, camera just stays put.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,78 +192,44 @@ class DeliveryRouteMap extends StatelessWidget {
       );
     }
 
-    final points = <ll.LatLng>[
-      if (restaurantPos != null) restaurantPos,
-      if (customerPos != null) customerPos,
-      if (riderPos != null) riderPos,
-    ];
-    final bounds = points.length > 1 ? LatLngBounds.fromPoints(points) : null;
+    final initialCenter = _activeDestination ?? restaurantPos ?? customerPos ?? riderPos ?? _fallbackCenter;
 
-    return FlutterMap(
-      options: MapOptions(
-        initialCenter: restaurantPos ?? customerPos ?? _fallbackCenter,
-        initialZoom: 14,
-        initialCameraFit: bounds != null
-            ? CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60))
-            : null,
-      ),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.riderapp',
-        ),
-        if (restaurantPos != null && customerPos != null)
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: [restaurantPos, customerPos],
-                color: AppColors.primary,
-                strokeWidth: 3,
-                pattern: StrokePattern.dashed(segments: const [12, 8]),
-              ),
-            ],
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(target: initialCenter, zoom: 14),
+      onMapCreated: (controller) {
+        _controller = controller;
+        _fitToAvailablePoints();
+      },
+      markers: {
+        if (restaurantPos != null)
+          Marker(
+            markerId: const MarkerId('restaurant'),
+            position: restaurantPos,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            infoWindow: const InfoWindow(title: 'Restaurant'),
           ),
-        MarkerLayer(
-          markers: [
-            if (restaurantPos != null)
-              Marker(
-                point: restaurantPos,
-                width: 36,
-                height: 36,
-                child: _pin(Icons.storefront_rounded, Colors.red),
-              ),
-            if (customerPos != null)
-              Marker(
-                point: customerPos,
-                width: 36,
-                height: 36,
-                child: _pin(Icons.home_rounded, Colors.blue),
-              ),
-            if (riderPos != null)
-              Marker(
-                point: riderPos,
-                width: 36,
-                height: 36,
-                child: _pin(Icons.two_wheeler_rounded, Colors.green),
-              ),
-          ],
-        ),
-        const SimpleAttributionWidget(
-          source: Text('OpenStreetMap'),
-        ),
-      ],
-    );
-  }
-
-  Widget _pin(IconData icon, Color color) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        border: Border.all(color: color, width: 2),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 4)],
-      ),
-      child: Icon(icon, color: color, size: 20),
+        if (customerPos != null)
+          Marker(
+            markerId: const MarkerId('customer'),
+            position: customerPos,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+            infoWindow: const InfoWindow(title: 'Customer'),
+          ),
+        if (riderPos != null)
+          Marker(
+            markerId: const MarkerId('rider'),
+            position: riderPos,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            infoWindow: const InfoWindow(title: 'You'),
+            anchor: const Offset(0.5, 0.5),
+          ),
+      },
+      polylines: _polylines,
+      myLocationEnabled: false,
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+      mapToolbarEnabled: false,
+      compassEnabled: true,
     );
   }
 }

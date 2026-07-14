@@ -26,6 +26,13 @@
         android:label="riderapp"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Required by google_maps_flutter to render map tiles. Must have
+             "Maps SDK for Android" (this) and "Directions API" (used via
+             HTTP by DirectionsService) both enabled in Google Cloud Console
+             for this key's project. -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="AIzaSyBF4uuS-wOzPVXZLUpleRh1ElAIPe-JuNk"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -78,6 +78,7 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
             customerLng: order.customerLng,
             riderLat: state.riderLat,
             riderLng: state.riderLng,
+            isToCustomer: isToCustomer,
           ),
         ),
         Positioned(
