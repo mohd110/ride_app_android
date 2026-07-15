@@ -1,6 +1,6 @@
 name: riderapp
 description: Rider Connect App - Hybrid Mobile and Web Simulator.
-version: 4.10.1+1
+version: 4.10.2+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -22,6 +22,7 @@ dependencies:
   http: ^1.6.0
   google_maps_flutter: ^2.17.1
   flutter_polyline_points: ^3.1.0
+  flutter_dotenv: ^6.0.1
 
 dev_dependencies:
   flutter_test:
@@ -36,3 +37,4 @@ flutter:
     - assets/images/customer_avatar.png
     - assets/images/delivery_proof.png
     - assets/sounds/new_order_alert.mp3
+    - .env

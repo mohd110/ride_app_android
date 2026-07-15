@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -25,6 +26,12 @@ void overlayMain() {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Loads GOOGLE_MAPS_API_KEY (see lib/config/maps_config.dart) from the
+  // bundled .env asset. Must happen before anything touches MapsConfig.apiKey
+  // — in practice that's only once the rider opens an active-delivery
+  // screen, well after this resolves, but load it eagerly here regardless.
+  await dotenv.load(fileName: '.env');
 
   // Must be called before runApp so the ReceivePort used for background→main
   // communication is registered before any isolate can send to it.

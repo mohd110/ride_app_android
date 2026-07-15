@@ -29,10 +29,11 @@
         <!-- Required by google_maps_flutter to render map tiles. Must have
              "Maps SDK for Android" (this) and "Directions API" (used via
              HTTP by DirectionsService) both enabled in Google Cloud Console
-             for this key's project. -->
+             for this key's project. Value injected from the project's .env
+             file at build time — see android/app/build.gradle.kts. -->
         <meta-data
             android:name="com.google.android.geo.API_KEY"
-            android:value="AIzaSyBF4uuS-wOzPVXZLUpleRh1ElAIPe-JuNk"/>
+            android:value="${GOOGLE_MAPS_API_KEY}"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

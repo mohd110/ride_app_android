@@ -1,8 +1,29 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Reads the Flutter project's .env file (gitignored — see .env.example for
+// the expected keys) so the same GOOGLE_MAPS_API_KEY used by Dart code
+// (lib/config/maps_config.dart, via flutter_dotenv) can also be injected
+// into AndroidManifest.xml as a manifest placeholder — the native Maps SDK
+// reads its key from the manifest, not from Dart/dotenv, so it needs its
+// own copy of the value at build time rather than a hardcoded one.
+val envFile = File(rootDir, "../.env")
+val envProperties = Properties()
+if (envFile.exists()) {
+    envFile.forEachLine { line ->
+        val trimmed = line.trim()
+        if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && trimmed.contains("=")) {
+            val idx = trimmed.indexOf("=")
+            envProperties[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim()
+        }
+    }
+}
+val googleMapsApiKey: String = envProperties.getProperty("GOOGLE_MAPS_API_KEY", "")
 
 android {
     namespace = "com.example.riderapp"
@@ -24,6 +45,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Consumed by AndroidManifest.xml's com.google.android.geo.API_KEY
+        // meta-data as ${GOOGLE_MAPS_API_KEY}. Applies to every build type
+        // (debug and release both inherit from defaultConfig).
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsApiKey
     }
 
     buildTypes {
