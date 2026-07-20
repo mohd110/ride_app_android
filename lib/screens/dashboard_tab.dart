@@ -6,6 +6,7 @@ import '../theme/app_colors.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_card.dart';
 import '../widgets/new_order_flash_overlay.dart';
+import '../widgets/online_status_indicator.dart';
 import 'notifications_screen.dart';
 import 'support_screen.dart';
 import 'trip_stats_screen.dart';
@@ -73,7 +74,7 @@ class DashboardTab extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 12),
-          _buildStatusBadge(state.isOnline),
+          OnlineStatusBadge(online: state.isOnline),
           const SizedBox(height: 12),
           Text(
             state.isOnline
@@ -87,51 +88,9 @@ class DashboardTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 28),
-          GestureDetector(
+          OnlineToggleCard(
+            online: state.isOnline,
             onTap: state.isOnline ? null : () => state.goOnline(),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceMuted.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: state.isOnline ? AppColors.primary : AppColors.goOnlineButton,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      state.isOnline ? Icons.wifi_rounded : Icons.power_settings_new_rounded,
-                      color: Colors.white,
-                      size: 40,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    state.isOnline ? 'ONLINE' : 'GO ONLINE',
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
           const SizedBox(height: 20),
           InkWell(
@@ -236,12 +195,18 @@ class DashboardTab extends StatelessWidget {
       children: [
         Row(
           children: [
-            _buildStatusBadge(true),
+            const OnlineStatusBadge(online: true),
             const Spacer(),
             TextButton.icon(
               onPressed: () => state.goOffline(),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.error,
+                backgroundColor: AppColors.error.withOpacity(0.08),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              ),
               icon: const Icon(Icons.power_settings_new_rounded, size: 16),
-              label: const Text('Go Offline'),
+              label: const Text('Go Offline', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
             ),
           ],
         ),
@@ -394,39 +359,6 @@ class DashboardTab extends StatelessWidget {
                       Icon(Icons.check_rounded, size: 18),
                     ],
                   ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(bool online) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      decoration: BoxDecoration(
-        color: online ? AppColors.primary.withOpacity(0.12) : AppColors.offlineBadge,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: online ? AppColors.primary : AppColors.textMuted,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            online ? 'ONLINE' : 'OFFLINE',
-            style: TextStyle(
-              color: online ? AppColors.primary : AppColors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.5,
-            ),
           ),
         ],
       ),

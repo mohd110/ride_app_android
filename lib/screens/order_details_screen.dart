@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../data/mock_data.dart';
+import '../services/phone_service.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_card.dart';
 import 'chat_screen.dart';
-import 'call_screen.dart';
 
 class OrderDetailsScreen extends StatelessWidget {
   final String orderId;
@@ -14,7 +14,6 @@ class OrderDetailsScreen extends StatelessWidget {
   final double tip;
   final String distance;
   final String status;
-  final bool isCompleted;
   // Set when viewing a past delivery from history — uses the real address/
   // items captured for that specific order instead of falling back to
   // whatever the rider's current active order happens to be (which made
@@ -33,7 +32,6 @@ class OrderDetailsScreen extends StatelessWidget {
     this.tip = 0,
     required this.distance,
     this.status = 'COMPLETED',
-    this.isCompleted = true,
     this.isHistorical = false,
     this.restaurantAddress,
     this.items,
@@ -210,12 +208,6 @@ class OrderDetailsScreen extends StatelessWidget {
                       ),
                     ),
                   )),
-            const SizedBox(height: 16),
-            if (!isCompleted)
-              ElevatedButton(
-                onPressed: () {},
-                child: const Text('Mark as Picked Up'),
-              ),
           ],
         ),
       ),
@@ -226,7 +218,7 @@ class OrderDetailsScreen extends StatelessWidget {
     return OutlinedButton(
       onPressed: () {
         if (icon == Icons.phone_rounded && phone != null) {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => CallScreen(contactName: label, phone: phone)));
+          PhoneService.call(context, phone);
         } else if (icon == Icons.message_rounded) {
           Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(contactName: chatName ?? label)));
         } else {

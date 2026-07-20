@@ -173,6 +173,7 @@ class AppState extends ChangeNotifier {
   String? get claimingOrderId => _claimingOrderId;
   String? get errorMessage => _errorMessage;
   String? get riderId => _riderId;
+  String? get deviceId => _deviceId;
   String? get forcedLogoutMessage => _forcedLogoutMessage;
   int get currentTab => _currentTab;
   OrderState get orderState => _orderState;
@@ -916,10 +917,74 @@ class AppState extends ChangeNotifier {
       completedTasks: _earningsSummary.totalOrders,
       totalEarnings: _earningsSummary.lifetimeEarnings,
       activeHours: '—',
-      deviceId: '—',
+      deviceId: _deviceId ?? '—',
       avatarUrl: profile['avatar_url'] as String?,
+      phone: profile['phone'] as String?,
+      vehicleType: profile['vehicle_type'] as String?,
+      vehicleModel: profile['vehicle_model'] as String?,
+      vehicleRegistrationNumber: profile['vehicle_registration_number'] as String?,
+      licenseNumber: profile['license_number'] as String?,
+      address: profile['address'] as String?,
+      emergencyContactName: profile['emergency_contact_name'] as String?,
+      emergencyContactPhone: profile['emergency_contact_phone'] as String?,
     );
     return null;
+  }
+
+  /// Saves editable profile fields (see EditProfileScreen) straight to
+  /// Supabase, then updates the in-memory profile so the UI reflects the
+  /// change immediately without a full re-fetch. Returns an error message
+  /// on failure, or null on success.
+  Future<String?> updateProfile({
+    required String fullName,
+    String? phone,
+    String? vehicleType,
+    String? vehicleModel,
+    String? vehicleRegistrationNumber,
+    String? licenseNumber,
+    String? address,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+  }) async {
+    final riderId = _riderId;
+    if (riderId == null) return 'Not signed in';
+    if (fullName.trim().isEmpty) return 'Full name cannot be empty';
+
+    try {
+      await _orders.updateProfile(riderId, {
+        'full_name': fullName.trim(),
+        'phone': phone?.trim(),
+        'vehicle_type': vehicleType?.trim(),
+        'vehicle_model': vehicleModel?.trim(),
+        'vehicle_registration_number': vehicleRegistrationNumber?.trim(),
+        'license_number': licenseNumber?.trim(),
+        'address': address?.trim(),
+        'emergency_contact_name': emergencyContactName?.trim(),
+        'emergency_contact_phone': emergencyContactPhone?.trim(),
+      });
+
+      _rider = _rider.copyWith(
+        displayName: fullName.trim(),
+        phone: phone?.trim(),
+        vehicleType: vehicleType?.trim(),
+        vehicleModel: vehicleModel?.trim(),
+        vehicleRegistrationNumber: vehicleRegistrationNumber?.trim(),
+        licenseNumber: licenseNumber?.trim(),
+        address: address?.trim(),
+        emergencyContactName: emergencyContactName?.trim(),
+        emergencyContactPhone: emergencyContactPhone?.trim(),
+      );
+      notifyListeners();
+      return null;
+    } on PostgrestException catch (e) {
+      // Column not found means migration 013 hasn't been applied yet.
+      if (e.message.toLowerCase().contains('column')) {
+        return 'Profile could not be saved — the backend hasn\'t been updated yet. Contact support.';
+      }
+      return e.message.isNotEmpty ? e.message : 'Could not save profile. Please try again.';
+    } catch (e) {
+      return 'Could not save profile. Please try again.';
+    }
   }
 
   /// Loads everything the earnings/history/wallet screens show, straight
@@ -965,18 +1030,7 @@ class AppState extends ChangeNotifier {
       final bytes = await picked.readAsBytes();
       final url = await _orders.uploadRiderProfilePhoto(riderId, bytes);
 
-      _rider = RiderProfile(
-        id: _rider.id,
-        displayName: _rider.displayName,
-        fleetId: _rider.fleetId,
-        memberSince: _rider.memberSince,
-        rating: _rider.rating,
-        completedTasks: _rider.completedTasks,
-        totalEarnings: _rider.totalEarnings,
-        activeHours: _rider.activeHours,
-        deviceId: _rider.deviceId,
-        avatarUrl: url,
-      );
+      _rider = _rider.copyWith(avatarUrl: url);
       return null;
     } catch (e) {
       return 'Could not upload photo. Please try again.';

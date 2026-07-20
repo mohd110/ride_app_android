@@ -1,8 +1,13 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../services/directions_service.dart';
 import '../theme/app_colors.dart';
+
+/// Home/customer pin color — the app's palette (AppColors) has no blue, and
+/// red/green are already claimed by restaurant/rider.
+const _customerPinColor = Color(0xFF2563EB);
 
 /// Renders rider/restaurant/customer pins on a Google Map, with the real
 /// driving route (via the Google Directions API) drawn between the rider
@@ -53,6 +58,14 @@ class _DeliveryRouteMapState extends State<DeliveryRouteMap> {
   DateTime? _lastFetchTime;
   LatLng? _lastFetchOrigin;
 
+  // Rendered once (not per-build) and reused for every marker of that type —
+  // regenerating a bitmap on every rebuild would be wasteful. Null until
+  // _loadMarkerIcons() finishes; build() falls back to a default pin hue
+  // until then so the map never has a blank/missing marker while these load.
+  BitmapDescriptor? _riderIcon;
+  BitmapDescriptor? _restaurantIcon;
+  BitmapDescriptor? _customerIcon;
+
   LatLng? get _restaurantPos =>
       widget.restaurantLat != null && widget.restaurantLng != null
           ? LatLng(widget.restaurantLat!, widget.restaurantLng!)
@@ -71,7 +84,72 @@ class _DeliveryRouteMapState extends State<DeliveryRouteMap> {
   @override
   void initState() {
     super.initState();
+    _loadMarkerIcons();
     _maybeRefetchRoute(force: true);
+  }
+
+  Future<void> _loadMarkerIcons() async {
+    final icons = await Future.wait([
+      _renderPinIcon(icon: Icons.two_wheeler_rounded, color: AppColors.success),
+      _renderPinIcon(icon: Icons.storefront_rounded, color: AppColors.primary),
+      _renderPinIcon(icon: Icons.home_rounded, color: _customerPinColor),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _riderIcon = icons[0];
+      _restaurantIcon = icons[1];
+      _customerIcon = icons[2];
+    });
+  }
+
+  /// Rasterizes a Material Icon glyph inside a white, colored-border circle
+  /// (same look as the pins the old OSM-based map used) into a PNG bitmap
+  /// suitable for [Marker.icon] — google_maps_flutter has no built-in way to
+  /// use an IconData directly, only bitmaps/assets.
+  Future<BitmapDescriptor> _renderPinIcon({required IconData icon, required Color color}) async {
+    const logicalSize = 44.0;
+    final density = WidgetsBinding.instance.platformDispatcher.views.first.devicePixelRatio;
+    final pixelSize = (logicalSize * density).round();
+    final radius = pixelSize / 2;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    // Soft drop shadow, then the white circle, then a colored ring — matches
+    // the pin style used elsewhere in this app.
+    canvas.drawCircle(
+      Offset(radius, radius + density),
+      radius - (2 * density),
+      Paint()
+        ..color = Colors.black.withOpacity(0.28)
+        ..maskFilter = const ui.MaskFilter.blur(ui.BlurStyle.normal, 3),
+    );
+    canvas.drawCircle(Offset(radius, radius), radius - (3 * density), Paint()..color = Colors.white);
+    canvas.drawCircle(
+      Offset(radius, radius),
+      radius - (3 * density),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2 * density,
+    );
+
+    final textPainter = TextPainter(textDirection: TextDirection.ltr)
+      ..text = TextSpan(
+        text: String.fromCharCode(icon.codePoint),
+        style: TextStyle(
+          fontSize: logicalSize * 0.5 * density,
+          fontFamily: icon.fontFamily,
+          package: icon.fontPackage,
+          color: color,
+        ),
+      )
+      ..layout();
+    textPainter.paint(canvas, Offset(radius - textPainter.width / 2, radius - textPainter.height / 2));
+
+    final image = await recorder.endRecording().toImage(pixelSize, pixelSize);
+    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.bytes(bytes!.buffer.asUint8List(), imagePixelRatio: density);
   }
 
   @override
@@ -205,21 +283,21 @@ class _DeliveryRouteMapState extends State<DeliveryRouteMap> {
           Marker(
             markerId: const MarkerId('restaurant'),
             position: restaurantPos,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            icon: _restaurantIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
             infoWindow: const InfoWindow(title: 'Restaurant'),
           ),
         if (customerPos != null)
           Marker(
             markerId: const MarkerId('customer'),
             position: customerPos,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+            icon: _customerIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
             infoWindow: const InfoWindow(title: 'Customer'),
           ),
         if (riderPos != null)
           Marker(
             markerId: const MarkerId('rider'),
             position: riderPos,
-            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            icon: _riderIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
             infoWindow: const InfoWindow(title: 'You'),
             anchor: const Offset(0.5, 0.5),
           ),

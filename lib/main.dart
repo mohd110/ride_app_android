@@ -42,8 +42,23 @@ Future<void> main() async {
     anonKey: SupabaseConfig.anonKey,
   );
 
-  await NotificationService.instance.initialize();
+  await NotificationService.instance.initialize(
+    // Tap while the app process is already alive (foreground or
+    // backgrounded-but-not-killed) — the common case.
+    onNotificationTap: (payload) {
+      if (payload == NotificationService.newOrderPayload) {
+        AppState.instance.handleBubbleTap();
+      }
+    },
+  );
   await AppState.instance.initialize();
+
+  // Tap that cold-started this process (app was fully killed beforehand) —
+  // the callback above never fires in that case since nothing was listening
+  // yet when the tap happened, so it has to be checked explicitly instead.
+  if (await NotificationService.instance.wasLaunchedByNewOrderNotification()) {
+    AppState.instance.handleBubbleTap();
+  }
 
   // When the overlay bubble is tapped it sends "open_app" via shareData().
   // We route to the correct tab/screen, close the bubble, then bring the

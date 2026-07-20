@@ -6,9 +6,9 @@ import '../widgets/app_card.dart';
 import '../widgets/delivery_route_map.dart';
 import '../widgets/photo_source_sheet.dart';
 import '../widgets/swipe_slider.dart';
+import '../services/phone_service.dart';
 import 'active_order_detail_screen.dart';
 import 'chat_screen.dart';
-import 'call_screen.dart';
 
 class ActiveOrderFlow extends StatefulWidget {
   const ActiveOrderFlow({Key? key}) : super(key: key);
@@ -158,11 +158,9 @@ class _ActiveOrderFlowState extends State<ActiveOrderFlow> {
                 )),
               )),
               const SizedBox(height: 10),
-              _fabBtn(Icons.phone_rounded, onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => CallScreen(
-                  contactName: isToCustomer ? order.customerName : order.restaurant,
-                  phone: isToCustomer ? order.customerPhone : order.restaurantPhone,
-                )),
+              _fabBtn(Icons.phone_rounded, onTap: () => PhoneService.call(
+                context,
+                isToCustomer ? order.customerPhone : order.restaurantPhone,
               )),
             ],
           ),

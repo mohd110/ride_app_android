@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_config.dart';
+import 'settings_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Background service public API — called from AppState
@@ -137,10 +139,10 @@ class _RiderTaskHandler extends TaskHandler {
   @override
   void onRepeatEvent(DateTime timestamp) {
     // Reconnect Realtime if the WebSocket silently dropped (common on mobile
-    // when the device wakes from deep sleep or switches networks).
-    _ensureRealtimeConnected();
-    // Backup poll — catches any order that arrived during a Realtime gap.
-    _pollOrders();
+    // when the device wakes from deep sleep or switches networks), then poll
+    // regardless as a backup — catches anything that arrived during the gap,
+    // and covers the case where reconnecting itself silently fails.
+    _ensureRealtimeConnected().then((_) => _pollOrders());
   }
 
   @override
@@ -175,9 +177,29 @@ class _RiderTaskHandler extends TaskHandler {
         .subscribe();
   }
 
-  void _ensureRealtimeConnected() {
+  /// Checking `_realtimeChannel == null` alone isn't enough — the socket can
+  /// silently drop (Doze, network switch, OS killing the connection) without
+  /// the channel *reference* ever becoming null, so that check alone would
+  /// never notice and never reconnect. `client.realtime.isConnected` reads
+  /// the actual socket state, so a genuine silent drop gets caught here and
+  /// forces both a socket reconnect and a fresh channel resubscribe. This
+  /// was the main reason order alerts were inconsistent — Realtime could go
+  /// stale for the rest of the session with everything still relying on the
+  /// separate 30s poll (itself subject to the same Doze throttling) as the
+  /// only remaining path.
+  Future<void> _ensureRealtimeConnected() async {
     final client = Supabase.instance.client;
     if (client.auth.currentSession == null) return;
+
+    if (!client.realtime.isConnected) {
+      // RealtimeChannel.subscribe() reconnects the underlying socket itself
+      // (`if (!socket.isConnected) socket.connect();`) before joining, so a
+      // fresh subscribe is enough — no need to touch the socket directly.
+      _subscribeRealtime();
+      _subscribeSessionWatch();
+      return;
+    }
+
     if (_realtimeChannel == null) _subscribeRealtime();
     if (_sessionChannel == null) _subscribeSessionWatch();
   }
@@ -329,28 +351,54 @@ class _RiderTaskHandler extends TaskHandler {
     await prefs.setStringList(_seenIdsKey, _seenOrderIds.toList());
   }
 
+  // Must match NotificationService.newOrderPayload (lib/services/
+  // notification_service.dart) — duplicated rather than imported to avoid a
+  // circular import between the two isolates' notification setup; each
+  // isolate already duplicates its own copy of the channel id/settings for
+  // the same reason.
+  static const _newOrderPayload = 'new_order';
+
+  // Guaranteed OS-level buzz tied directly to the notification post itself
+  // (not a separate app-triggered Vibration.vibrate() call) — this is the
+  // ONLY vibration source when the main isolate isn't alive to run its own
+  // richer continuous ring, so it needs to fire reliably on its own rather
+  // than depending on a second, independent vibration call that could be
+  // suppressed separately. Three buzzes, finite (not looped) since this
+  // isolate has no clean way to stop an indefinite one.
+  static final _vibrationPattern = Int64List.fromList([0, 700, 300, 700, 300, 700]);
+
   Future<void> _showOrderNotification({
     required String title,
     required String body,
   }) async {
+    // Settings screen — "Push notifications" off means no alert at all,
+    // read directly from SharedPreferences since this isolate never runs
+    // through AppState. "Sound alerts" off keeps the notification itself
+    // but drops sound/vibration.
+    if (!await SettingsService.pushNotificationsEnabled()) return;
+    final soundEnabled = await SettingsService.soundAlertsEnabled();
+
     try {
       await _notif.show(
         id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title: title,
         body: body,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             _ordersChannelId,
             'New Orders',
             importance: Importance.max,
             priority: Priority.high,
-            playSound: true,
-            sound: RawResourceAndroidNotificationSound('new_order_alert'),
-            enableVibration: true,
+            playSound: soundEnabled,
+            sound: soundEnabled ? const RawResourceAndroidNotificationSound('new_order_alert') : null,
+            enableVibration: soundEnabled,
+            vibrationPattern: soundEnabled ? _vibrationPattern : null,
             // Wake the screen so the rider sees the alert immediately.
             fullScreenIntent: true,
+            category: AndroidNotificationCategory.call,
           ),
         ),
+        payload: _newOrderPayload,
       );
     } catch (_) {
       // Best-effort — if the notification fails, the poll/Realtime event

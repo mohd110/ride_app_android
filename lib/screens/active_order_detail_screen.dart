@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_card.dart';
+import '../services/phone_service.dart';
 import '../widgets/detail_page_scaffold.dart';
-import 'call_screen.dart';
 import 'chat_screen.dart';
 
 class ActiveOrderDetailScreen extends StatelessWidget {
@@ -54,7 +54,7 @@ class ActiveOrderDetailScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CallScreen(contactName: order.restaurant, phone: order.restaurantPhone))),
+                      onPressed: () => PhoneService.call(context, order.restaurantPhone),
                       icon: const Icon(Icons.phone_rounded, size: 16),
                       label: const Text('Call'),
                     ),

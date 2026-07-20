@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../app_state.dart';
-import '../data/mock_data.dart';
 import '../theme/app_colors.dart';
+import '../screens/company_info_screen.dart';
 import '../screens/delivery_history_screen.dart';
 import '../screens/notifications_screen.dart';
 import '../screens/support_screen.dart';
@@ -54,6 +55,7 @@ class AppDrawer extends StatelessWidget {
                   _item(context, Icons.pedal_bike_rounded, 'Vehicle Details', () => _push(context, const VehicleDetailsScreen())),
                   _item(context, Icons.account_balance_wallet_rounded, 'Payment Info', () => _push(context, const PaymentInfoScreen())),
                   _item(context, Icons.help_outline_rounded, 'Support', () => _push(context, const SupportScreen())),
+                  _item(context, Icons.business_outlined, 'Company Info', () => _push(context, const CompanyInfoScreen())),
                   _item(context, Icons.settings_rounded, 'Settings', () => _push(context, const SettingsScreen())),
                   const Divider(),
                   _item(context, Icons.logout_rounded, 'Logout', () {
@@ -63,9 +65,19 @@ class AppDrawer extends StatelessWidget {
                 ],
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text('Rider Connect v4.2.1', textAlign: TextAlign.center, style: TextStyle(color: AppColors.textMuted, fontSize: 11)),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: FutureBuilder<PackageInfo>(
+                future: PackageInfo.fromPlatform(),
+                builder: (context, snapshot) {
+                  final version = snapshot.data;
+                  return Text(
+                    version != null ? 'Rider Connect v${version.version}+${version.buildNumber}' : ' ',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                  );
+                },
+              ),
             ),
           ],
         ),

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../app_state.dart';
 import '../data/mock_data.dart';
 import '../theme/app_colors.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_card.dart';
 import '../widgets/photo_source_sheet.dart';
+import 'company_info_screen.dart';
+import 'edit_profile_screen.dart';
 import 'notifications_screen.dart';
 import 'vehicle_details_screen.dart';
 import 'payment_info_screen.dart';
@@ -73,18 +76,32 @@ class ProfileTab extends StatelessWidget {
                     padding: EdgeInsets.zero,
                     child: Column(
                       children: [
-                        _buildMenuItem(context, Icons.local_shipping_outlined, 'Vehicle Type', 'Electric Bicycle', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VehicleTypeScreen()))),
+                        _buildMenuItem(context, Icons.person_outline_rounded, 'Edit Profile', 'Name, phone, vehicle & more', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()))),
+                        const Divider(height: 1),
+                        _buildMenuItem(context, Icons.local_shipping_outlined, 'Vehicle Type', rider.vehicleType ?? 'Not set', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()))),
                         const Divider(height: 1),
                         _buildMenuItem(context, Icons.account_balance_wallet_outlined, 'Payment Info', 'Payout every Monday', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaymentInfoScreen()))),
                         const Divider(height: 1),
                         _buildMenuItem(context, Icons.help_outline_rounded, 'Support & Help Center', '24/7 Agent Availability', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SupportScreen()))),
+                        const Divider(height: 1),
+                        _buildMenuItem(context, Icons.business_outlined, 'Company Information', 'About, terms & policies', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CompanyInfoScreen()))),
                         const Divider(height: 1),
                         _buildMenuItem(context, Icons.logout_rounded, 'Logout Session', null, () => state.logout(), isLogout: true),
                       ],
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Text('Rider Connect v4.2.1-stable', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                  FutureBuilder<PackageInfo>(
+                    future: PackageInfo.fromPlatform(),
+                    builder: (context, snapshot) {
+                      final version = snapshot.data;
+                      return Text(
+                        version != null ? 'Rider Connect v${version.version}+${version.buildNumber}' : ' ',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: AppColors.textMuted, fontSize: 11),
+                      );
+                    },
+                  ),
                   Text('DEVICE ID: ${rider.deviceId}', textAlign: TextAlign.center, style: const TextStyle(color: AppColors.textMuted, fontSize: 10)),
                   const SizedBox(height: 20),
                 ],
@@ -149,7 +166,17 @@ class ProfileTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Text(rider.displayName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(rider.displayName, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen())),
+                child: const Icon(Icons.edit_rounded, color: Colors.white70, size: 16),
+              ),
+            ],
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -190,36 +217,39 @@ class ProfileTab extends StatelessWidget {
   }
 
   Widget _buildVehicleCard(AppState state) {
-    final v = MockData.vehicle;
+    final rider = state.rider;
+    final model = rider.vehicleModel?.isNotEmpty == true ? rider.vehicleModel! : 'No vehicle info yet';
+    final reg = rider.vehicleRegistrationNumber?.isNotEmpty == true
+        ? 'Reg: ${rider.vehicleRegistrationNumber}'
+        : 'Tap to add your vehicle details';
+
     return AppCard(
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(color: AppColors.surfaceAccent, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.pedal_bike_rounded, color: AppColors.primary, size: 24),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(v['model'] as String, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
-                  Text('ID: ${v['id']}', style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
-                ],
-              ),
-            ],
+          Expanded(
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(color: AppColors.surfaceAccent, borderRadius: BorderRadius.circular(12)),
+                  child: const Icon(Icons.pedal_bike_rounded, color: AppColors.primary, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(model, style: const TextStyle(color: AppColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                      Text(reg, style: const TextStyle(color: AppColors.textMuted, fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('${state.batteryLevel}%', style: const TextStyle(color: AppColors.primary, fontSize: 14, fontWeight: FontWeight.w700)),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 18),
-            ],
-          ),
+          const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted, size: 18),
         ],
       ),
     );

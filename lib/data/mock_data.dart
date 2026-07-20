@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import '../app_state.dart';
 
 class RiderProfile {
   final String id;
@@ -13,6 +12,16 @@ class RiderProfile {
   final String activeHours;
   final String deviceId;
   final String? avatarUrl;
+  // Editable via EditProfileScreen — all null until the rider fills them in
+  // (see supabase/013_rider_profile_and_company_info.sql for the columns).
+  final String? phone;
+  final String? vehicleType;
+  final String? vehicleModel;
+  final String? vehicleRegistrationNumber;
+  final String? licenseNumber;
+  final String? address;
+  final String? emergencyContactName;
+  final String? emergencyContactPhone;
 
   const RiderProfile({
     required this.id,
@@ -25,7 +34,49 @@ class RiderProfile {
     required this.activeHours,
     required this.deviceId,
     this.avatarUrl,
+    this.phone,
+    this.vehicleType,
+    this.vehicleModel,
+    this.vehicleRegistrationNumber,
+    this.licenseNumber,
+    this.address,
+    this.emergencyContactName,
+    this.emergencyContactPhone,
   });
+
+  RiderProfile copyWith({
+    String? displayName,
+    String? avatarUrl,
+    String? phone,
+    String? vehicleType,
+    String? vehicleModel,
+    String? vehicleRegistrationNumber,
+    String? licenseNumber,
+    String? address,
+    String? emergencyContactName,
+    String? emergencyContactPhone,
+  }) {
+    return RiderProfile(
+      id: id,
+      displayName: displayName ?? this.displayName,
+      fleetId: fleetId,
+      memberSince: memberSince,
+      rating: rating,
+      completedTasks: completedTasks,
+      totalEarnings: totalEarnings,
+      activeHours: activeHours,
+      deviceId: deviceId,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      phone: phone ?? this.phone,
+      vehicleType: vehicleType ?? this.vehicleType,
+      vehicleModel: vehicleModel ?? this.vehicleModel,
+      vehicleRegistrationNumber: vehicleRegistrationNumber ?? this.vehicleRegistrationNumber,
+      licenseNumber: licenseNumber ?? this.licenseNumber,
+      address: address ?? this.address,
+      emergencyContactName: emergencyContactName ?? this.emergencyContactName,
+      emergencyContactPhone: emergencyContactPhone ?? this.emergencyContactPhone,
+    );
+  }
 }
 
 class NotificationItem {
@@ -196,22 +247,6 @@ class OrderLineItem {
   const OrderLineItem({required this.name, required this.subtitle, required this.qty});
 }
 
-class PaymentMethod {
-  final String bankName;
-  final String accountMasked;
-  final String payoutSchedule;
-  final String lastPayout;
-  final double lastPayoutAmount;
-
-  const PaymentMethod({
-    required this.bankName,
-    required this.accountMasked,
-    required this.payoutSchedule,
-    required this.lastPayout,
-    required this.lastPayoutAmount,
-  });
-}
-
 class SupportTopic {
   final String title;
   final String description;
@@ -233,24 +268,6 @@ class MockData {
     totalEarnings: 18450.00,
     activeHours: '498 hrs',
     deviceId: '88-X9-RDR',
-  );
-
-  static const vehicle = {
-    'model': 'Lectric eBike Pro v2',
-    'id': 'VHC-9920-B',
-    'type': 'Electric Bicycle',
-    'lastServiced': 'Oct 12',
-    'rangeKm': 42,
-    'temperature': '28°C',
-    'chargeCycles': 924,
-  };
-
-  static const payment = PaymentMethod(
-    bankName: 'Chase Bank',
-    accountMasked: '****4921',
-    payoutSchedule: 'Every Monday at 00:00 UTC',
-    lastPayout: 'Jun 9, 2026',
-    lastPayoutAmount: 312.40,
   );
 
   static const activeOrder = ActiveOrderData(
@@ -308,17 +325,4 @@ class MockData {
     ),
   ];
 
-  static const hubManagers = [
-    {'name': 'Sarah Mitchell', 'role': 'Downtown Hub Lead', 'phone': '+1 (800) 555-0199', 'hours': 'Mon–Fri 8am–8pm'},
-    {'name': 'James Ortiz', 'role': 'Night Shift Coordinator', 'phone': '+1 (800) 555-0288', 'hours': 'Daily 6pm–2am'},
-    {'name': 'Fleet Onboarding', 'role': 'New rider registration', 'phone': '+1 (800) 555-0100', 'hours': '24/7'},
-  ];
-
-  static const settingsOptions = [
-    {'title': 'Push notifications', 'subtitle': 'Orders, payouts, and bonuses', 'enabled': true},
-    {'title': 'Navigation app', 'subtitle': 'Google Maps', 'enabled': null},
-    {'title': 'Dark mode', 'subtitle': 'Off', 'enabled': false},
-    {'title': 'Auto-accept nearby', 'subtitle': 'Within 2 km only', 'enabled': false},
-    {'title': 'Sound alerts', 'subtitle': 'New assignment chime', 'enabled': true},
-  ];
 }

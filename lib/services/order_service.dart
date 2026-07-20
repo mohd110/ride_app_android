@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 import 'package:geolocator/geolocator.dart';
-import 'package:postgrest/postgrest.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config/supabase_client.dart';
 import '../data/mock_data.dart';
@@ -213,11 +212,11 @@ class OrderService {
 
   Future<List<AvailableOrderSummary>> fetchAvailableOrders({double pricePerKm = 10.0}) async {
     try {
-      return await _mapAvailableRows(await _queryAvailableOrders(_orderSelect), pricePerKm);
+      return _mapAvailableRows(await _queryAvailableOrders(_orderSelect), pricePerKm);
     } on PostgrestException {
       const fallbackSelect =
           'id, status, delivery_fee, delivery_address, restaurants(name, address, phone)';
-      return await _mapAvailableRows(await _queryAvailableOrders(fallbackSelect), pricePerKm);
+      return _mapAvailableRows(await _queryAvailableOrders(fallbackSelect), pricePerKm);
     }
   }
 
@@ -255,7 +254,7 @@ class OrderService {
         .limit(1);
 
     if ((rows as List).isEmpty) return null;
-    return ActiveOrderData.fromSupabase(rows.first as Map<String, dynamic>, pricePerKm: pricePerKm);
+    return ActiveOrderData.fromSupabase(rows.first, pricePerKm: pricePerKm);
   }
 
   /// Atomically claims [orderId] for the authenticated rider on [deviceId].
@@ -334,6 +333,13 @@ class OrderService {
     return await supabase.from('profiles').select().eq('id', userId).maybeSingle();
   }
 
+  /// Saves editable profile fields straight to `profiles`. Only send the
+  /// fields that changed — this does a plain `.update()`, not an upsert, so
+  /// it never touches columns not included in [fields].
+  Future<void> updateProfile(String userId, Map<String, dynamic> fields) async {
+    await supabase.from('profiles').update(fields).eq('id', userId);
+  }
+
   /// The current per-km delivery rate, admin-configurable from the
   /// restaurant dashboard. Falls back to ₹10/km if the settings row or
   /// the table itself isn't reachable (e.g. migration not yet applied).
@@ -349,6 +355,19 @@ class OrderService {
       return 10.0;
     } catch (_) {
       return 10.0;
+    }
+  }
+
+  /// Company/app info shown on the Support and Company Info screens —
+  /// singleton row (supabase/013_rider_profile_and_company_info.sql), same
+  /// pattern as delivery_settings. Returns null if the migration hasn't
+  /// been applied yet or the table is otherwise unreachable, so callers can
+  /// fall back to sensible defaults instead of crashing.
+  Future<Map<String, dynamic>?> fetchCompanyInfo() async {
+    try {
+      return await supabase.from('company_info').select().eq('id', 1).maybeSingle();
+    } catch (_) {
+      return null;
     }
   }
 

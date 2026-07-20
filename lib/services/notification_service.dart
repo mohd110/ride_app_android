@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 import 'background_service.dart';
 import 'order_service.dart';
+import 'settings_service.dart';
 
 class NotificationService {
   NotificationService._();
@@ -35,7 +36,12 @@ class NotificationService {
   bool _initialized = false;
   Timer? _stopTimer;
 
-  Future<void> initialize() async {
+  /// Payload attached to every new-order notification (main isolate and
+  /// background isolate both use this same value) so a tap can be
+  /// recognized regardless of which isolate posted it.
+  static const newOrderPayload = 'new_order';
+
+  Future<void> initialize({void Function(String? payload)? onNotificationTap}) async {
     if (_initialized) return;
 
     // Configure the Android foreground-service options (channel, restart on
@@ -45,6 +51,12 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     await _plugin.initialize(
       settings: const InitializationSettings(android: androidSettings),
+      // Fires when the rider taps the notification while the app process is
+      // already alive (foreground or backgrounded-but-not-killed) — covers
+      // the common case. The cold-start case (app fully killed, tap
+      // relaunches it) is handled separately via
+      // getNotificationAppLaunchDetails() in main().
+      onDidReceiveNotificationResponse: (response) => onNotificationTap?.call(response.payload),
     );
 
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
@@ -84,6 +96,9 @@ class NotificationService {
   /// elapses. Calling this again while already ringing restarts the window.
   Future<void> showNewOrders(List<AvailableOrderSummary> orders) async {
     if (!_initialized || orders.isEmpty) return;
+    // Settings screen — "Push notifications" off means no alert at all.
+    if (!await SettingsService.pushNotificationsEnabled()) return;
+    final soundEnabled = await SettingsService.soundAlertsEnabled();
 
     final first = orders.first;
     final title = orders.length == 1 ? 'New order available' : '${orders.length} new orders available';
@@ -91,24 +106,26 @@ class NotificationService {
         ? '${first.restaurantName} → ${first.dropoffAddress} • ₹${first.estimatedEarnings.toStringAsFixed(2)} est. earnings'
         : 'Tap to view available deliveries';
 
-    // Start (or restart) the looping alert ring.
-    try {
-      _stopTimer?.cancel();
-      await _audioPlayer.stop();
-      await _audioPlayer.play(AssetSource('sounds/new_order_alert.mp3'));
-      _stopTimer = Timer(_ringExpiryDuration, stopAlert);
-    } catch (_) {
-      // Best-effort — the system notification sound below is the fallback.
-    }
-
-    // Continuous vibration alongside the ring — separate from the
-    // notification channel's one-shot vibrate-on-post.
-    try {
-      if (await Vibration.hasVibrator()) {
-        await Vibration.vibrate(pattern: _vibrationPattern, repeat: 1);
+    if (soundEnabled) {
+      // Start (or restart) the looping alert ring.
+      try {
+        _stopTimer?.cancel();
+        await _audioPlayer.stop();
+        await _audioPlayer.play(AssetSource('sounds/new_order_alert.mp3'));
+        _stopTimer = Timer(_ringExpiryDuration, stopAlert);
+      } catch (_) {
+        // Best-effort — the system notification sound below is the fallback.
       }
-    } catch (_) {
-      // Best-effort — not every device has a controllable vibrator.
+
+      // Continuous vibration alongside the ring — separate from the
+      // notification channel's one-shot vibrate-on-post.
+      try {
+        if (await Vibration.hasVibrator()) {
+          await Vibration.vibrate(pattern: _vibrationPattern, repeat: 1);
+        }
+      } catch (_) {
+        // Best-effort — not every device has a controllable vibrator.
+      }
     }
 
     try {
@@ -116,23 +133,36 @@ class NotificationService {
         id: DateTime.now().millisecondsSinceEpoch ~/ 1000,
         title: title,
         body: body,
-        notificationDetails: const NotificationDetails(
+        notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             _channelId,
             _channelName,
             channelDescription: _channelDescription,
             importance: Importance.max,
             priority: Priority.high,
-            playSound: true,
-            sound: RawResourceAndroidNotificationSound(_soundResource),
-            enableVibration: true,
+            playSound: soundEnabled,
+            sound: soundEnabled ? const RawResourceAndroidNotificationSound(_soundResource) : null,
+            enableVibration: soundEnabled,
             fullScreenIntent: true,
+            category: AndroidNotificationCategory.call,
           ),
         ),
+        payload: newOrderPayload,
       );
     } catch (_) {
       // Best-effort — the in-app sound above already fired.
     }
+  }
+
+  /// Checks whether this app process was cold-started by the rider tapping
+  /// a new-order notification (app fully killed beforehand) — the
+  /// `onDidReceiveNotificationResponse` callback passed to [initialize]
+  /// only fires for taps while the app process is already alive, so this
+  /// covers the other case. Call once, early in `main()`.
+  Future<bool> wasLaunchedByNewOrderNotification() async {
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    return details?.didNotificationLaunchApp == true &&
+        details?.notificationResponse?.payload == newOrderPayload;
   }
 
   /// Immediately stops the ring + vibration (rider opened the app, accepted,
